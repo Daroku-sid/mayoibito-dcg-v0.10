@@ -28,37 +28,16 @@ const V8Zones = {
     const self = this;
 
     /* 枠外タップで閉じる（11.1・12.1）。
-       ★その入力は閉じるためだけに使い、背後は操作しません。 */
-    const scrim = rootEl.querySelector('#v8-zone-scrim');
-    if (scrim) {
-      scrim.addEventListener('pointerdown', function (e) {
-        if (self.mode === 'pick') return;   // 選んでいる最中は勝手に閉じない
-        self.close();
-        e.preventDefault();
-        e.stopPropagation();
-      }, true);
-    }
-
-    /* ★カード以外のどこを触っても閉じます（2026-08-01）。
-
-       ロストの一覧は枠を持たず、カードを画面の真ん中へ並べます。
-       ★カードの周りの余白は一覧そのものの領域なので、暗転の幕には
-         当たりません。閉じるつもりで触っても何も起きず、
-         幕の細い縁を狙う羽目になっていました。
-
-       カードだけは素通しにします。長押しで詳細を開くためです。
-       選んでいる最中（pick）は、勝手に閉じません。 */
-    const box = rootEl.querySelector('#v8-zone');
-    if (box) {
-      box.addEventListener('pointerdown', function (e) {
-        if (self.mode === 'pick') return;
-        const t = e.target;
-        if (t && t.closest && t.closest('.v8-zone__card')) return;
-        if (t && t.closest && t.closest('.v8-zone__foot')) return;
-        self.close();
-        e.preventDefault();
-        e.stopPropagation();
-      }, true);
+       ★v0.10.2：「触れて、動かさずに離した」ときだけ閉じる。カードと下の帯（確定ボタン）以外なら、
+         パネルの上でもどこでも閉じる。閉じた直後の入力は後ろへ届かない（js/v010-tapclose.js）。
+         選んでいる最中（pick）は勝手に閉じない。カードは長押しで詳細を開くので素通しにする */
+    if (typeof V10TapClose !== 'undefined') {
+      V10TapClose.attach(rootEl.querySelector('#v8-zone-wrap') || rootEl, {
+        isOpen: function () { return !!self.mode; },
+        canClose: function () { return self.mode !== 'pick'; },
+        exclude: '.v8-zone__card, .v8-zone__foot',
+        onClose: function () { self.close(); },
+      });
     }
 
     const done = rootEl.querySelector('#v8-zone-confirm');

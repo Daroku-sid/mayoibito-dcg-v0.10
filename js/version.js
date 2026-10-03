@@ -14,7 +14,7 @@
 
 'use strict';
 
-const APP_VERSION = '0.10.0';
+const APP_VERSION = '0.10.2';
 const APP_TITLE = '『マヨイビト』DCG';
 
 /* 画面やコピーに出す表記（例：v0.6.10） */

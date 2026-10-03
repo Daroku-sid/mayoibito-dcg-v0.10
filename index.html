@@ -7,15 +7,15 @@
        ここに直接書くと、更新のたび取り残されるためです。 -->
   <title>マヨイビト</title>
 <!-- ★v0.9：共通デザイントークン。ほかのどのCSSより先に読みます -->
-<link rel="stylesheet" href="css/ui-tokens.css?v=0.10.0">
-<link rel="stylesheet" href="css/layout.css?v=0.10.0">
-<link rel="stylesheet" href="css/v07.css?v=0.10.0">
+<link rel="stylesheet" href="css/ui-tokens.css?v=0.10.2">
+<link rel="stylesheet" href="css/layout.css?v=0.10.2">
+<link rel="stylesheet" href="css/v07.css?v=0.10.2">
 <!-- ★v0.9：共通UI部品。旧デザインより後に読み、当てた画面だけ上書きします。
      （当てていない画面は、これまでの見た目のままです） -->
-<link rel="stylesheet" href="css/ui-components.css?v=0.10.0">
-<link rel="stylesheet" href="css/v08-battle.css?v=0.10.0">
+<link rel="stylesheet" href="css/ui-components.css?v=0.10.2">
+<link rel="stylesheet" href="css/v08-battle.css?v=0.10.2">
 <!-- ★Stage 7 の調整パネル（?tune=1 のときだけ出ます）。Release で外します -->
-<link rel="stylesheet" href="css/v08-tune.css?v=0.10.0">
+<link rel="stylesheet" href="css/v08-tune.css?v=0.10.2">
 </head>
 <body>
 
@@ -1248,94 +1248,95 @@
 
 <!-- ★v0.10：ルール処理は gd1 v1.0（R28最終）。旧 cards.js / decks.js / effects.js / game.js は撤去。
      できごと通知（events.js）と乱数（random.js）を先に読み、ルール処理に渡す（js/rules-boot.js） -->
-<script src="js/random.js?v=0.10.0"></script>
-<script src="js/events.js?v=0.10.0"></script>
-<script src="js/rules-gd1.js?v=0.10.0"></script>
-<script src="js/rules-boot.js?v=0.10.0"></script>
-<script src="js/v010-step.js?v=0.10.0"></script>
-<script src="js/v010-snap.js?v=0.10.0"></script>
+<script src="js/random.js?v=0.10.2"></script>
+<script src="js/events.js?v=0.10.2"></script>
+<script src="js/rules-gd1.js?v=0.10.2"></script>
+<script src="js/rules-boot.js?v=0.10.2"></script>
+<script src="js/v010-step.js?v=0.10.2"></script>
+<script src="js/v010-snap.js?v=0.10.2"></script>
 <!-- ★v0.10：CPU（AI は Worker の中で考える。cpu-worker.js は tools/build-cpu-worker.js が作る） -->
-<script src="js/cpu-worker.js?v=0.10.0"></script>
-<script src="js/v010-cpu.js?v=0.10.0"></script>
+<script src="js/cpu-worker.js?v=0.10.2"></script>
+<script src="js/v010-cpu.js?v=0.10.2"></script>
+<script src="js/v010-tapclose.js?v=0.10.2"></script>
 <!-- CPU対戦のAI（v0.3で追加。読み込み順は ai-core → ai-heuristic → ai-deckstack → ai-player） -->
-<script src="js/ai-core.js?v=0.10.0"></script>
-<script src="js/ai-heuristic.js?v=0.10.0"></script>
-<script src="js/ai-deckstack.js?v=0.10.0"></script>
-<script src="js/ai-player.js?v=0.10.0"></script>
-<script src="js/ai-uiops.js?v=0.10.0"></script>
-<script src="js/card-images.js?v=0.10.0"></script>
-<script src="js/version.js?v=0.10.0"></script>
-<script src="js/errors.js?v=0.10.0"></script>
-<script src="js/save-manager.js?v=0.10.0"></script>
-<script src="js/collection.js?v=0.10.0"></script>
-<script src="js/card-filter.js?v=0.10.0"></script>
-<script src="js/deck-validator.js?v=0.10.0"></script>
-<script src="js/deck-manager.js?v=0.10.0"></script>
-<script src="js/assets.js?v=0.10.0"></script>
-<script src="js/storage.js?v=0.10.0"></script>
-<script src="js/se.js?v=0.10.0"></script>
-<script src="js/howto.js?v=0.10.0"></script>
-<script src="js/ui-icons.js?v=0.10.0"></script>
-<script src="js/ui-filter-sheet.js?v=0.10.0"></script>
-<script src="js/card-list-ui.js?v=0.10.0"></script>
-<script src="js/deck-list-ui.js?v=0.10.0"></script>
-<script src="js/deck-editor-ui.js?v=0.10.0"></script>
-<script src="js/deck-picker-ui.js?v=0.10.0"></script>
-<script src="js/result.js?v=0.10.0"></script>
+<script src="js/ai-core.js?v=0.10.2"></script>
+<script src="js/ai-heuristic.js?v=0.10.2"></script>
+<script src="js/ai-deckstack.js?v=0.10.2"></script>
+<script src="js/ai-player.js?v=0.10.2"></script>
+<script src="js/ai-uiops.js?v=0.10.2"></script>
+<script src="js/card-images.js?v=0.10.2"></script>
+<script src="js/version.js?v=0.10.2"></script>
+<script src="js/errors.js?v=0.10.2"></script>
+<script src="js/save-manager.js?v=0.10.2"></script>
+<script src="js/collection.js?v=0.10.2"></script>
+<script src="js/card-filter.js?v=0.10.2"></script>
+<script src="js/deck-validator.js?v=0.10.2"></script>
+<script src="js/deck-manager.js?v=0.10.2"></script>
+<script src="js/assets.js?v=0.10.2"></script>
+<script src="js/storage.js?v=0.10.2"></script>
+<script src="js/se.js?v=0.10.2"></script>
+<script src="js/howto.js?v=0.10.2"></script>
+<script src="js/ui-icons.js?v=0.10.2"></script>
+<script src="js/ui-filter-sheet.js?v=0.10.2"></script>
+<script src="js/card-list-ui.js?v=0.10.2"></script>
+<script src="js/deck-list-ui.js?v=0.10.2"></script>
+<script src="js/deck-editor-ui.js?v=0.10.2"></script>
+<script src="js/deck-picker-ui.js?v=0.10.2"></script>
+<script src="js/result.js?v=0.10.2"></script>
 
 <!-- チュートリアル（v0.5で追加）
      読み込み順は game.js のあと。台本の仕込みがルール処理を前提にするためです。
      tutorial-deck  … 手札と山札を台本どおりに並べる
      tutorial-basic-data … 基本編の台本（説明文・ステップ・CPUの動き） -->
-<script src="js/tutorial-deck.js?v=0.10.0"></script>
-<script src="js/tutorial-basic-data.js?v=0.10.0"></script>
-<script src="js/tutorial-advanced-data.js?v=0.10.0"></script>
-<script src="js/tutorial-controller.js?v=0.10.0"></script>
-<script src="js/tutorial-ui.js?v=0.10.0"></script>
-<script src="js/tutorial-actions.js?v=0.10.0"></script>
-<script src="js/tutorial-cpu-driver.js?v=0.10.0"></script>
-<script src="js/screens.js?v=0.10.0"></script>
-<script src="js/cpu-driver.js?v=0.10.0"></script>
-<script src="js/preview.js?v=0.10.0"></script>
+<script src="js/tutorial-deck.js?v=0.10.2"></script>
+<script src="js/tutorial-basic-data.js?v=0.10.2"></script>
+<script src="js/tutorial-advanced-data.js?v=0.10.2"></script>
+<script src="js/tutorial-controller.js?v=0.10.2"></script>
+<script src="js/tutorial-ui.js?v=0.10.2"></script>
+<script src="js/tutorial-actions.js?v=0.10.2"></script>
+<script src="js/tutorial-cpu-driver.js?v=0.10.2"></script>
+<script src="js/screens.js?v=0.10.2"></script>
+<script src="js/cpu-driver.js?v=0.10.2"></script>
+<script src="js/preview.js?v=0.10.2"></script>
 <!-- ★v0.9 Phase 5-1：preview.js から切り出した「状態を読むところ」。
      preview.js の窓（__matchRead）を使うので、そのあとに読みます。 -->
-<script src="js/match-view.js?v=0.10.0"></script>
-<script src="js/match-flow.js?v=0.10.0"></script>
-<script src="js/match-fx.js?v=0.10.0"></script>
+<script src="js/match-view.js?v=0.10.2"></script>
+<script src="js/match-flow.js?v=0.10.2"></script>
+<script src="js/match-fx.js?v=0.10.2"></script>
 <!-- 起動役。preview.js の関数を使うので、必ずそのあとに読みます -->
-<script src="js/tutorial-finish.js?v=0.10.0"></script>
-<script src="js/tutorial-runner.js?v=0.10.0"></script>
+<script src="js/tutorial-finish.js?v=0.10.2"></script>
+<script src="js/tutorial-runner.js?v=0.10.2"></script>
 
 <!-- v0.7 アプリシェル（Stage 1）。既存スクリプトの後に読み込みます。 -->
-<script src="js/v07-save.js?v=0.10.0"></script>
+<script src="js/v07-save.js?v=0.10.2"></script>
 <!-- v0.7 メインハブ（Stage 2）。shell から参照するので shell より前に。 -->
-<script src="js/v07-hub-data.js?v=0.10.0"></script>
-<script src="js/v07-art.js?v=0.10.0"></script>
-<script src="js/v07-home.js?v=0.10.0"></script>
-<script src="js/v07-panels.js?v=0.10.0"></script>
-<script src="js/v07-screen.js?v=0.10.0"></script>
-<script src="js/v07-bridge.js?v=0.10.0"></script>
-<script src="js/v07-hub.js?v=0.10.0"></script>
-<script src="js/v07-shell.js?v=0.10.0"></script>
-<script src="js/v08-images.js?v=0.10.0"></script>
-<script src="js/v08-state.js?v=0.10.0"></script>
-<script src="js/v08-board.js?v=0.10.0"></script>
-<script src="js/v08-commands.js?v=0.10.0"></script>
-<script src="js/v08-hand.js?v=0.10.0"></script>
-<script src="js/v08-conditions.js?v=0.10.0"></script>
-<script src="js/v08-detail.js?v=0.10.0"></script>
-<script src="js/v08-tracking.js?v=0.10.0"></script>
-<script src="js/v08-target.js?v=0.10.0"></script>
-<script src="js/v08-zones.js?v=0.10.0"></script>
-<script src="js/v08-effects.js?v=0.10.0"></script>
-<script src="js/v08-log.js?v=0.10.0"></script>
-<script src="js/v08-mulligan.js?v=0.10.0"></script>
-<script src="js/v08-prep.js?v=0.10.0"></script>
-<script src="js/v08-result.js?v=0.10.0"></script>
-<script src="js/v08-settings.js?v=0.10.0"></script>
-<script src="js/v08-fx.js?v=0.10.0"></script>
-<script src="js/v08-tune.js?v=0.10.0"></script>
-<script src="js/v08-battle.js?v=0.10.0"></script>
+<script src="js/v07-hub-data.js?v=0.10.2"></script>
+<script src="js/v07-art.js?v=0.10.2"></script>
+<script src="js/v07-home.js?v=0.10.2"></script>
+<script src="js/v07-panels.js?v=0.10.2"></script>
+<script src="js/v07-screen.js?v=0.10.2"></script>
+<script src="js/v07-bridge.js?v=0.10.2"></script>
+<script src="js/v07-hub.js?v=0.10.2"></script>
+<script src="js/v07-shell.js?v=0.10.2"></script>
+<script src="js/v08-images.js?v=0.10.2"></script>
+<script src="js/v08-state.js?v=0.10.2"></script>
+<script src="js/v08-board.js?v=0.10.2"></script>
+<script src="js/v08-commands.js?v=0.10.2"></script>
+<script src="js/v08-hand.js?v=0.10.2"></script>
+<script src="js/v08-conditions.js?v=0.10.2"></script>
+<script src="js/v08-detail.js?v=0.10.2"></script>
+<script src="js/v08-tracking.js?v=0.10.2"></script>
+<script src="js/v08-target.js?v=0.10.2"></script>
+<script src="js/v08-zones.js?v=0.10.2"></script>
+<script src="js/v08-effects.js?v=0.10.2"></script>
+<script src="js/v08-log.js?v=0.10.2"></script>
+<script src="js/v08-mulligan.js?v=0.10.2"></script>
+<script src="js/v08-prep.js?v=0.10.2"></script>
+<script src="js/v08-result.js?v=0.10.2"></script>
+<script src="js/v08-settings.js?v=0.10.2"></script>
+<script src="js/v08-fx.js?v=0.10.2"></script>
+<script src="js/v08-tune.js?v=0.10.2"></script>
+<script src="js/v08-battle.js?v=0.10.2"></script>
 <script>
   // 既存の init（preview.js）も DOMContentLoaded で走りますが、
   // v0.7 の器は最前面レイヤーとして独立に立ち上がります。

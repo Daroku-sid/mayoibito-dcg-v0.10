@@ -2626,11 +2626,21 @@ function flushEffectAnimations(next) {
   const p = Game.state.players[side];
   const moved = (p.hand.length !== before.hand) || (p.trash.length !== before.trash);
 
+  const ev = effectFlow.eventCard;
   animateZoneChanges(side, before, function () {
-    if (effectFlow) effectFlow.before = snapshotZones(side);   // ここまでを反映済みにする
+    if (effectFlow) {
+      effectFlow.before = snapshotZones(side);   // ここまでを反映済みにする
+      /* ★使ったイベントは、まだ「来ていない」ことにしておく（最後の演出で動かすため） */
+      if (ev) {
+        const tc = effectFlow.before.trashCards;
+        for (let i = tc.length - 1; i >= 0; i--) {
+          if (tc[i] === ev || (tc[i] && tc[i].uid === ev.uid)) { tc.splice(i, 1); effectFlow.before.trash -= 1; }
+        }
+      }
+    }
     renderAll();
     setTimeout(next, moved ? ms(STEP_GAP) : 0);
-  });
+  }, ev, true);
 }
 
 /** 効果から呼ばれる画面操作 */
@@ -4243,29 +4253,38 @@ function v8CardOf(inst) {
   try { return V8State.cardOf(inst); } catch (e) { return null; }
 }
 
-function animateZoneChanges(side, before, rawDone, eventCard) {
+function animateZoneChanges(side, before, rawDone, eventCard, holdEvent) {
   const done = sessionGuard(rawDone || function () {});
   const p = Game.state.players[side];
   const isMine = (side === bottomSide());
 
-  function has(list, c) { return list.indexOf(c) !== -1; }
+  /* ★v0.10：同じ札かどうかは「通し番号（uid）」で見る。
+     効果の途中で人や CPU に聞くと、局面を戻してやり直す（js/v010-step.js）。そのとき札の入れ物は
+     作り直されるので、「同じ物か」で比べると前からトラッシュにあった札まで全部「新しく来た」と
+     数えてしまい、トラッシュの札がまとめて浮き上がっていた（ボスの指摘 2026-10-03） */
+  function sameCard(a, b) { return a === b || (!!a && !!b && a.uid !== undefined && a.uid === b.uid); }
+  function has(list, c) { for (let i = 0; i < list.length; i++) if (sameCard(list[i], c)) return true; return false; }
 
   const leftHand = before.handCards.filter(function (c) { return !has(p.hand, c); });
   const joinedHand = p.hand.filter(function (c) { return !has(before.handCards, c); });
   const joinedTrash = p.trash.filter(function (c) { return !has(before.trashCards, c); });
 
   const discarded = joinedTrash.filter(function (c) {
-    return has(leftHand, c) && c !== eventCard;
+    return has(leftHand, c) && !sameCard(c, eventCard);
   });
   const board = before.boardCards || [];
   // 場から離れてトラッシュへ置かれたカード（倒された怪異や、外れたグッズ）
   const leftBoard = joinedTrash.filter(function (c) {
-    return !has(leftHand, c) && c !== eventCard && has(board, c);
+    return !has(leftHand, c) && !sameCard(c, eventCard) && has(board, c);
   });
   const deckToTrash = joinedTrash.filter(function (c) {
-    return !has(leftHand, c) && c !== eventCard && !has(board, c);
+    return !has(leftHand, c) && !sameCard(c, eventCard) && !has(board, c);
   });
-  const usedEvent = (eventCard && has(joinedTrash, eventCard)) ? [eventCard] : [];
+  /* ★holdEvent：効果の途中の演出（flushEffectAnimations）では、使ったイベントは動かさない。
+     最後の演出で「使ったイベント」として動かす（途中で動かすと山札から飛んできたように見えていた） */
+  const usedEvent = (!holdEvent && eventCard && has(joinedTrash, eventCard)) ? [joinedTrash.find(function (c) { return sameCard(c, eventCard); })] : [];
+  /* 検査用：いま何枚を動かそうとしたか */
+  if (typeof window !== 'undefined') (window.__v10zoneMoves = window.__v10zoneMoves || []).push({ side: side, discarded: discarded.length, deckToTrash: deckToTrash.length, leftBoard: leftBoard.length, joinedHand: joinedHand.length, usedEvent: usedEvent.length, trash: p.trash.length, eventUid: eventCard ? eventCard.uid : null, toTrash: joinedTrash.map(function (c) { return c.uid; }) });
 
   if (!discarded.length && !deckToTrash.length && !joinedHand.length &&
       !leftBoard.length && !usedEvent.length) {
@@ -4296,7 +4315,8 @@ function animateZoneChanges(side, before, rawDone, eventCard) {
       v8card: v8CardOf(inst),
       onDepart: function () {
         if (!isMine || !play.handSnapshot) return;
-        const i = play.handSnapshot.indexOf(inst);
+        let i = -1;
+        play.handSnapshot.forEach(function (c, k) { if (i === -1 && sameCard(c, inst)) i = k; });
         if (i !== -1) { play.handSnapshot.splice(i, 1); refreshHandOnly(); }
       },
     });

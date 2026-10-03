@@ -31,14 +31,16 @@ const V8Log = {
     this._root = rootEl;
     const self = this;
 
-    const scrim = rootEl.querySelector('#v8-log-scrim');
-    if (scrim) {
-      /* 枠外タップで対戦へ戻る（14.1）。その入力は閉じるためだけに使う */
-      scrim.addEventListener('pointerdown', function (e) {
-        self.close();
-        e.preventDefault();
-        e.stopPropagation();
-      }, true);
+    /* 枠外タップで対戦へ戻る（14.1）。
+       ★v0.10.2：「触れて、動かさずに離した」ときだけ閉じる（スクロールの指では閉じない）。
+         カード名と「新しいログ」ボタン以外なら、ログの上でもどこでも閉じる。
+         閉じた直後の入力は後ろへ届かない（js/v010-tapclose.js） */
+    if (typeof V10TapClose !== 'undefined') {
+      V10TapClose.attach(rootEl.querySelector('#v8-log-wrap') || rootEl, {
+        isOpen: function () { return self.isOpen(); },
+        exclude: '.v8-log__card, .v8-log__more, button, a',
+        onClose: function () { self.close(); },
+      });
     }
 
     const body = rootEl.querySelector('#v8-log-body');

@@ -69,7 +69,9 @@ window.__v8MulliganExchange = function (done) {
     /* ★「左から順に」なので、交換前の並びのまま拾います */
     const returning = before.filter(isPicked);
     const kept = before.filter(function (c) { return !isPicked(c); });
-    const drawn = after.filter(function (c) { return kept.indexOf(c) === -1; });
+    /* ★v0.10：同じ札かは通し番号（uid）で見る（局面を作り直しても札の番号は変わらない） */
+    const keptUids = kept.map(function (c) { return String(c.uid); });
+    const drawn = after.filter(function (c) { return keptUids.indexOf(String(c.uid)) === -1; });
 
     if (!returning.length && !drawn.length) { next(); return; }
 
@@ -90,7 +92,8 @@ window.__v8MulliganExchange = function (done) {
         v8to: { zone: 'deck', side: side },
         onDepart: function () {
           if (!play.handSnapshot) return;
-          const i = play.handSnapshot.indexOf(inst);
+          let i = -1;
+          play.handSnapshot.forEach(function (x, k) { if (i === -1 && String(x.uid) === String(inst.uid)) i = k; });
           if (i !== -1) { play.handSnapshot.splice(i, 1); c.refreshHandOnly(); }
         },
       };
