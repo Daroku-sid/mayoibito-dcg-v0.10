@@ -1,0 +1,1286 @@
+/* =====================================================================
+   v07.css ― v0.7 の外側の器（Stage 1：基盤）
+   ---------------------------------------------------------------------
+   ここには v0.7 で新設する「メインハブの器」だけを書きます。
+   既存の対戦画面（#viewport / #stage）や menu 階層の CSS には
+   一切触れません（仕様書 第21・26・32部：既存を壊さない）。
+
+   Stage 1 の範囲（仕様書 第27部）:
+     ・共通デザイントークン（第3部 3.2）
+     ・9:16 アプリシェル（第18部）
+     ・ローディング画面（第4部）
+     ・暗転レイヤー・ダイアログ基盤・通知基盤（第15・16部）
+     ・スマホ横向き案内 / PC中央480px（第18部 18.4）
+     ・高さ700px未満コンパクト表示の基盤（第18部 18.2）
+     ・prefers-reduced-motion 基盤（第23部）
+
+   Stage 2 以降で作るもの（メインハブ本体・5タブ・一枚絵など）は、
+   まだここには書きません。
+   ===================================================================== */
+
+/* =====================================================================
+   3.2 初期デザイントークン
+   数値は Stage 5 で実機調整可能。まずは仕様書の基準値を置きます。
+   ===================================================================== */
+:root {
+  /* ★v0.9：値そのものは css/ui-tokens.css へ移しました。
+     ここは、これまでの名前から新しい名前を指しているだけです。
+
+     ★同じ色に出どころが2つあると、片方だけ直して食い違います。
+       出どころは ui-tokens.css の1つに絞ります。
+     ★これまでの名前を残すのは、いま使っている箇所が多いためです。
+       画面ごとの差し替えが済んだら、この対応表も消せます。 */
+  --v7-color-bg: var(--ui-bg);
+  --v7-color-bg-outer: var(--ui-bg-outer);
+  --v7-color-panel: var(--ui-panel);
+  --v7-color-panel-soft: var(--ui-panel-soft);
+  --v7-color-border-gold: var(--ui-border);
+  --v7-color-text: var(--ui-text);
+  --v7-color-text-muted: var(--ui-text-muted);
+  --v7-color-accent: var(--ui-accent);
+  --v7-color-accent-soft: var(--ui-accent-soft);
+  --v7-color-danger: var(--ui-danger);
+  --v7-radius-small: var(--ui-radius-sm);
+  --v7-radius-medium: var(--ui-radius-md);
+  --v7-radius-large: var(--ui-radius-lg);
+
+  /* 器の最大幅（第18部 18.1：PCでは最大480px） */
+  --v7-shell-max-w: var(--ui-shell-max-w);
+
+  /* 将来、画面タイトルや大見出しだけ装飾フォントへ差し替えられるよう
+     変数に分離しておきます（第3部 3.3）。v0.7 では基本フォントのまま。 */
+  --v7-font-title: var(--ui-font-title);
+
+  /* タップ領域の下限（第3部 3.4：44〜48px以上） */
+  --v7-tap-min: var(--ui-tap-min);
+}
+
+/* =====================================================================
+   基本フォント（第3部 3.3）
+   ===================================================================== */
+.v7-root,
+.v7-root button,
+.v7-root input {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Noto Sans JP",
+    "Hiragino Kaku Gothic ProN",
+    "Yu Gothic",
+    sans-serif;
+}
+
+/* =====================================================================
+   v0.7 ルート：画面全体を覆う最前面レイヤー
+   ---------------------------------------------------------------------
+   既存の #viewport は裏に残したまま、その上に器をかぶせます。
+   Stage 4 で既存機能へ入るときだけ、この層を隠します。
+   ===================================================================== */
+.v7-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;                 /* 既存 UI より前 */
+  background: var(--v7-color-bg-outer);
+  color: var(--v7-color-text);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* v0.7 の器を隠す（既存機能へ入るとき。Stage 4 で使用）
+   ※ 既存 UI は body 直下の #viewport（#v7-root の兄弟）にある。
+     #v7-root は position:fixed / z-index:1000 で全面を覆うので、
+     これを隠すと下の既存画面がそのまま現れる。 */
+.v7-root.v7-hidden { display: none; }
+
+/* v0.7 ↔ 既存機能の行き来で使う暗転幕（Stage 4）
+   ---------------------------------------------------------------------
+   ふだんの画面遷移は #v7-root の中の .v7-wipe を使うが、
+   既存機能へ渡るときは #v7-root ごと隠すため、その幕では覆えない。
+   そこで body 直下に、両方より前面（z:3000）の幕を1枚だけ置く。 */
+.v7-xfade {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s linear;
+}
+.v7-xfade.v7-on {
+  opacity: 1;
+  pointer-events: auto;   /* 暗転中は入力を受けない */
+}
+
+/* =====================================================================
+   18. アプリシェル：9:16 をたもって中央へ収める
+   ---------------------------------------------------------------------
+   ・幅は 100% だが、PC などでは最大480px（18.1）
+   ・高さは 100dvh 優先、非対応環境は 100vh（18.3）
+   ・外側は濃紺の無地（18.4 PC）
+   ・セーフエリアは shell の内側パディングで避ける
+   ===================================================================== */
+.v7-shell-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;      /* 9:16箱を上下中央に。余白は濃紺 */
+  justify-content: center;
+  background: var(--v7-color-bg-outer);
+}
+
+.v7-shell {
+  position: relative;
+  /* ラフは 9:16。幅と高さの両方を 9:16 に固定し、画面内へ収める。
+     幅は「画面幅・最大480px・（画面高×9/16）」の最小値。
+     これで 1080基準の実寸（縦1920*--u）が必ず高さに収まる。 */
+  width: min(100vw, var(--v7-shell-max-w), calc((100dvh) * 9 / 16));
+  aspect-ratio: 9 / 16;
+  max-height: 100dvh;
+  background: var(--v7-color-bg);
+  overflow: hidden;
+
+  /* コンテナ化して「1080基準の1px」を単位 --u として定義する。
+     例: 160px の要素 → calc(160 * var(--u))。全端末で比率が保たれる。 */
+  container-type: inline-size;
+  --u: calc(100cqw / 1080);
+
+  /* =====================================================================
+     文字サイズ（第3部 3.3・Stage 5 で実寸化）
+     ---------------------------------------------------------------------
+     位置やパネルの寸法は 1080 幅基準（--u）で決めているが、実際の表示幅は
+     320〜480px なので、文字まで --u に比例させると 7〜13px まで縮み、
+     仕様の下限（本文14 / ボタン15 / パネルタイトル16 / 画面タイトル18 /
+     補足12）を大きく割り込んでしまう。
+     そこで文字だけ --u から切り離し、clamp() で 320〜480px の間を
+     滑らかに変化させる（仕様 3.3 の指定どおり）。
+     100cqw は .v7-shell の幅（＝実際の表示幅）を指す。
+     ===================================================================== */
+  /* ★v0.9：値は --ui-fs-* が持ちます（css/ui-tokens.css）。
+     ここは、これまでの名前から新しい名前を指しているだけです。
+
+     ★ただし置き場所はここ（.v7-shell）のままです。
+       cqw は「入れ物の幅」を指すので、入れ物の中で決める必要があります。
+       :root へ移すと、入れ物の外では値が壊れます。 */
+  --v7-fs-caption: var(--ui-fs-caption);
+  --v7-fs-body:    var(--ui-fs-body);
+  --v7-fs-button:  var(--ui-fs-button);
+  --v7-fs-panel:   var(--ui-fs-panel);
+  --v7-fs-title:   var(--ui-fs-title);
+  --v7-fs-hero:    var(--ui-fs-hero);
+  /* ラフのパネル角丸は 30px（1080基準）。実寸連動で使う。 */
+  --v7-panel-radius: calc(30 * var(--u));
+}
+
+/* 個別の画面レイヤーは、この shell の中に絶対配置で積む */
+.v7-layer {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.v7-layer.v7-on { display: block; }
+
+/* セーフエリアの内側だけを使うための共通ヘルパ
+   （上：ノッチ / 下：ホームバー） */
+.v7-safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+.v7-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* =====================================================================
+   4. ローディング画面（第4部）
+   ---------------------------------------------------------------------
+   ・背景は完全な黒 / ロゴや装飾は出さない
+   ・右下に「読み込み中...」
+   ・各文字を左から順にゆっくり上下（ウェーブ）
+   ・タイムアウト時は失敗表示＋再読み込み
+   ===================================================================== */
+.v7-loading {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  opacity: 1;
+  /* セーフエリアを考慮して配置（4.1） */
+  padding: env(safe-area-inset-top, 0px)
+           calc(env(safe-area-inset-right, 0px) + 22px)
+           calc(env(safe-area-inset-bottom, 0px) + 20px)
+           env(safe-area-inset-left, 0px);
+}
+/* 読み込み終了：暗転（黒画面）を通常より少しゆっくり晴らしてホームへ（4.3の演出）。
+   ローディング画面そのものを 0.7秒かけてフェードアウトさせ、下のハブを見せる。 */
+.v7-loading--fade {
+  opacity: 0;
+  transition: opacity 0.7s ease-out;
+  pointer-events: none;
+}
+
+.v7-loading__text {
+  display: inline-flex;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--v7-color-text-muted);
+}
+.v7-loading__text span {
+  display: inline-block;
+  white-space: pre;
+  animation: v7-wave 1.4s ease-in-out infinite;
+}
+@keyframes v7-wave {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(-3px); }
+}
+
+/* 失敗表示（4.1 タイムアウト） */
+.v7-loading__fail {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0 26px;
+  text-align: center;
+}
+.v7-loading.v7-failed { align-items: center; justify-content: center; }
+.v7-loading.v7-failed .v7-loading__text { display: none; }
+.v7-loading.v7-failed .v7-loading__fail { display: flex; }
+
+.v7-loading__fail p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--v7-color-text);
+}
+.v7-loading__retry {
+  min-width: 160px;
+  min-height: 46px;
+  padding: 12px 24px;
+  border-radius: var(--v7-radius-medium);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel);
+  color: var(--v7-color-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+.v7-loading__retry:disabled { opacity: 0.5; cursor: default; }
+
+/* =====================================================================
+   15.2 個別画面の暗転レイヤー（進入・復帰で 0.4 秒）
+   ---------------------------------------------------------------------
+   0.2秒で黒くする → 暗転中に切り替え → 0.2秒で戻す。
+   Stage 1 では層と CSS だけ用意し、Stage 3・4 の遷移で使います。
+   ===================================================================== */
+.v7-wipe {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s linear;
+}
+.v7-wipe.v7-on {
+  opacity: 1;
+  pointer-events: auto;          /* 暗転中は入力不可（15.2） */
+}
+
+/* =====================================================================
+   16. ダイアログ・通知
+   ===================================================================== */
+
+/* --- 16.1/16.2 ダイアログ暗幕 --- */
+.v7-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.66);   /* 60〜70%（16.1） */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+}
+.v7-scrim.v7-on { display: flex; }
+
+/* --- ダイアログ本体 --- */
+.v7-dialog {
+  width: 100%;
+  max-width: 420px;              /* 80〜88% を shell 内で担保 */
+  box-sizing: border-box;
+  background: var(--v7-color-panel);
+  border: 1px solid var(--v7-color-border-gold);
+  border-radius: var(--v7-radius-large);
+  padding: 22px 20px 18px;
+  color: var(--v7-color-text);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+.v7-dialog__title {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: var(--v7-font-title);
+}
+.v7-dialog__body {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--v7-color-text);
+  max-height: 46vh;
+  overflow-y: auto;             /* 長文のみ内部スクロール（16.1） */
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+}
+.v7-dialog__buttons {
+  display: flex;
+  gap: 12px;
+}
+.v7-dialog__buttons.v7-single { justify-content: stretch; }
+.v7-dialog__btn {
+  flex: 1 1 0;
+  min-height: 46px;
+  padding: 12px 16px;
+  border-radius: var(--v7-radius-medium);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel-soft);
+  color: var(--v7-color-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+.v7-dialog__btn.v7-primary {
+  border-color: var(--v7-color-accent);
+  background: var(--v7-color-accent-soft);
+}
+/* 危険操作の実行ボタンは暗い赤（16.2） */
+.v7-dialog__btn.v7-danger {
+  border-color: var(--v7-color-danger);
+  background: rgba(124, 41, 51, 0.42);
+}
+
+/* =====================================================================
+   16.3 短時間通知（画面上部・約4秒・順番に1件ずつ）
+   ---------------------------------------------------------------------
+   位置は shell 上部。メインハブでは情報・通貨の少し下だが、
+   Stage 1 では shell 上端（セーフエリア内側）に出す土台のみ。
+   ===================================================================== */
+.v7-toast-area {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 0;
+  pointer-events: none;
+}
+.v7-toast {
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 16px;
+  border-radius: var(--v7-radius-medium);
+  background: rgba(4, 6, 12, 0.86);
+  border: 1px solid rgba(154, 133, 89, 0.4);
+  color: var(--v7-color-text);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.v7-toast.v7-in { opacity: 1; transform: translateY(0); }
+
+/* =====================================================================
+   18.4 スマホ横向き案内（縦向きを促す）
+   ---------------------------------------------------------------------
+   ・スマホ横向き（coarse + hover:none + landscape）でのみ出す
+   ・PC の横長では出さない（18.4）
+   ===================================================================== */
+.v7-rotate {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 28px;
+  background: var(--v7-color-bg);
+  text-align: center;
+}
+.v7-rotate p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--v7-color-text);
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (hover: none) {
+  .v7-rotate { display: flex; }
+}
+
+/* =====================================================================
+   18.2 高さ 700px 未満のコンパクト表示（基盤・1段階のみ）
+   ---------------------------------------------------------------------
+   Stage 1 では、器と共通部品が縮んでも破綻しないよう、
+   ルートに目印クラス相当のフックだけ用意します。
+   実際の各パネルの詰めは Stage 2 以降で行います。
+   ===================================================================== */
+@media (max-height: 699px) {
+  .v7-shell { --v7-compact: 1; }
+  .v7-loading__text { font-size: 14px; }
+}
+
+/* =====================================================================
+   メインハブ（Stage 2・第5〜11部）
+   ---------------------------------------------------------------------
+   一枚絵を全面に敷き、その上に 上部情報／通貨／タブ固有パネル／ナビ を
+   重ねます（第6部 6.1）。パネルは濃紺ベタ（作者確定：半透明にしない）。
+   画像は未支給のため、一枚絵スロットは濃紺フォールバックで成立します。
+   ===================================================================== */
+
+.v7-hub { position: absolute; inset: 0; overflow: hidden; }
+
+/* -------- (1) 共通一枚絵レイヤー（第5部） -------- */
+.v7-art { position: absolute; inset: 0; z-index: 1; background: var(--v7-color-bg); }
+.v7-art__img {
+  position: absolute;
+  inset: 0;
+  background-color: var(--v7-color-bg);   /* 画像未読込でも濃紺（5.9） */
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  opacity: 0;
+  /* ★入れ替えは暗幕の裏（真っ暗なとき）で行うので、絵そのものは
+     瞬間で切り替える。ここに transition を入れると、暗幕が晴れる
+     1秒のあいだ前の絵と次の絵が重なって二重に見えてしまう。
+     見た目の変化は .v7-art__veil だけが担う。 */
+  transition: none;
+}
+/* 切り替えの暗転幕。一枚絵の上・グラデーションより下に敷き、
+   イラスト部分だけを暗くする（UIや下部パネルには掛からない）。 */
+.v7-art__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;                             /* 絵のすぐ上・グラデーション(2)の下 */
+  background: var(--v7-color-bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1s ease-in-out;
+}
+.v7-art__veil.v7-on { opacity: 1; }
+.v7-art__img.is-front { opacity: 1; }
+/* 上下を少し沈めて、重なる文字を読みやすく（6.1 (2)） */
+.v7-art__grad {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(4,6,12,0.55) 0%, rgba(4,6,12,0) 22%),
+    linear-gradient(to top, rgba(4,6,12,0.72) 0%, rgba(4,6,12,0) 34%);
+}
+/* 中央だけタップ可能な透明ボタン（5.5）。上部と下部には重ねない。 */
+.v7-art__tap {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(320 * var(--u) + env(safe-area-inset-top, 0px));   /* 上部情報の下から */
+  bottom: calc((120 + 20 + 548 + 20) * var(--u) + env(safe-area-inset-bottom, 0px));  /* ナビ+間+パネル+間 */
+  z-index: 3;
+  border: 0; padding: 0; margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* -------- (3) 上部プレイヤー情報・通貨（第6部・ラフ実寸1080基準） --------
+   単位 --u = シェル幅/1080。ラフの px をそのまま calc(px * var(--u)) で置く。
+   セーフエリア上端は v7-safe-top の padding-top で内側へずらす。 */
+.v7-top {
+  position: absolute;
+  z-index: 20;
+  top: env(safe-area-inset-top, 0px);
+  left: 0; right: 0;
+  height: calc(300 * var(--u));   /* アイコン+称号ぶんの当たり領域 */
+  pointer-events: none;
+}
+.v7-top > * { pointer-events: auto; }
+
+/* プロフィール（アイコン+ネームパネル+称号のまとまり） */
+.v7-profile {
+  position: absolute;
+  left: calc(20 * var(--u));
+  top: calc(20 * var(--u));
+  width: calc(470 * var(--u));    /* 130(アイコン左)+360(パネル) の右端まで */
+  height: calc(240 * var(--u));   /* パネル120 + 称号ぶん */
+  border: 0; background: transparent; padding: 0; margin: 0;
+  cursor: pointer;
+}
+/* ネームパネル 360×120、左上(130,20)→プロフィール内相対(110,0) */
+.v7-profile__namepanel {
+  position: absolute;
+  left: calc(110 * var(--u));
+  top: 0;
+  /* ★狭い画面での下限（v0.9）。
+     ★文字は実寸で下限を持つのに、載せる枠は割合で縮みます。
+       320px 幅では枠が 107px しかなく、16px の名前が入りきらず
+       「プレイ…」と切れていました。枠にも下限を敷きます。 */
+  width: max(calc(360 * var(--u)), 130px);
+  height: calc(120 * var(--u));
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: calc(6 * var(--u));
+  padding-left: calc(70 * var(--u));   /* アイコンに隠れる左側を空ける */
+  padding-right: calc(16 * var(--u));
+  box-sizing: border-box;
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel);
+  overflow: hidden;
+}
+.v7-profile__name {
+  font-size: var(--v7-fs-panel);
+  font-weight: 700; color: var(--v7-color-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; line-height: 1.1;
+}
+.v7-profile__level {
+  font-size: var(--v7-fs-caption);
+  color: var(--v7-color-text-muted); line-height: 1.1;
+}
+/* アイコン 160×160、左上(20,20)→プロフィール内相対(0,0)。ネームパネルの上に重ねる */
+.v7-profile__icon {
+  position: absolute;
+  left: 0; top: 0;
+  width: calc(160 * var(--u));
+  height: calc(160 * var(--u));
+  border-radius: 50%;
+  background: #2a3350;
+  border: 1px solid var(--v7-color-border-gold);
+  z-index: 2;
+}
+/* 称号：ネームパネル下辺の外側。
+   x はプレイヤー名の左端に揃える（パネル相対left110 + padding-left70 = 180）。
+   y はパネル下辺(相対120)の10px下 = 相対130（画面絶対では 200,150）。 */
+.v7-profile__title {
+  position: absolute;
+  left: calc(180 * var(--u));
+  top: calc(130 * var(--u));
+  /* ★称号も同じ理由で下限を敷きます */
+  max-width: max(calc(340 * var(--u)), 130px);
+  font-size: var(--v7-fs-caption);
+  color: var(--v7-color-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* 通貨 270×70 を20px間隔で縦2つ。右端から20px、上端20px。 */
+.v7-currency {
+  position: absolute;
+  right: calc(20 * var(--u));
+  top: calc(20 * var(--u));
+  display: flex; flex-direction: column;
+  gap: calc(20 * var(--u));
+}
+.v7-cur {
+  position: relative;
+  width: calc(270 * var(--u));
+  /* 補助操作だが押しやすさのため36pxを下限にする（第3部 3.4） */
+  height: max(calc(70 * var(--u)), 36px);
+  display: flex; align-items: center; gap: calc(10 * var(--u));
+  padding: 0 calc(56 * var(--u)) 0 calc(16 * var(--u));  /* 右は+表示ぶん */
+  box-sizing: border-box;
+  border-radius: var(--v7-radius-medium);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel);
+  color: var(--v7-color-text);
+  font-size: var(--v7-fs-body);
+  cursor: pointer;
+}
+.v7-cur__icon { width: calc(34 * var(--u)); height: calc(34 * var(--u)); border-radius: 50%; flex: 0 0 auto; }
+.v7-cur__icon--soft { background: #d7b25a; }
+.v7-cur__icon--premium { background: #7fb0e6; }
+.v7-cur__val { flex: 1 1 auto; text-align: right; font-variant-numeric: tabular-nums; }
+/* 課金ストア誘導の「四角＋プラス」表示（ボタンではなく表示のみ） */
+.v7-cur__plus {
+  position: absolute;
+  right: calc(10 * var(--u));
+  top: 50%; transform: translateY(-50%);
+  width: calc(40 * var(--u)); height: calc(40 * var(--u));
+  display: flex; align-items: center; justify-content: center;
+  border-radius: calc(8 * var(--u));
+  border: 1px solid var(--v7-color-border-gold);
+  background: rgba(255,255,255,0.06);
+  font-size: var(--v7-fs-body); line-height: 1;
+  color: var(--v7-color-text);
+}
+
+/* -------- (4) タブ固有パネル領域（第6部 6.4・ラフ実寸1080基準） --------
+   下端はナビ上端の20px上。高さはホームの総高（バナー120 + 20 + ミッション408
+   = 548）に合わせ、全タブ共通の枠とする。左右端は20ずつ。 */
+.v7-panels {
+  position: absolute;
+  z-index: 15;
+  left: calc(20 * var(--u));
+  right: calc(20 * var(--u));
+  /* ナビの実高さ（44px下限つき）＋間20 に合わせる */
+  bottom: calc(max(calc(120 * var(--u)), var(--v7-tap-min)) + calc(20 * var(--u))
+               + env(safe-area-inset-bottom, 0px));
+  height: calc(548 * var(--u));
+  overflow: hidden;
+}
+.v7-panel-slider { position: relative; width: 100%; height: 100%; }
+.v7-tabpanel { position: absolute; inset: 0; }
+
+/* スライド（0.3秒・方向つき：6.4） */
+.v7-slide-in-right { transform: translateX(100%); }
+.v7-slide-in-left  { transform: translateX(-100%); }
+.v7-slide-out-left  { transform: translateX(-100%); transition: transform 0.3s ease; }
+.v7-slide-out-right { transform: translateX(100%);  transition: transform 0.3s ease; }
+.v7-slide-center    { transform: translateX(0);     transition: transform 0.3s ease; }
+
+/* -------- (5) メインナビ（第6部 6.5・ラフ実寸 1080×120・底辺接地） -------- */
+.v7-nav {
+  position: absolute;
+  z-index: 25;
+  left: 0; right: 0; bottom: 0;
+  /* タップ領域の下限44pxを保証する（第3部 3.4）。
+     1080基準の120px相当は 320〜480px 幅では 35〜53px にしかならないため、
+     max() で下限を敷く。 */
+  height: calc(max(calc(120 * var(--u)), var(--v7-tap-min)) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);  /* ホームバーを避ける */
+  box-sizing: border-box;
+  display: flex;
+  background: rgba(6, 9, 18, 0.94);
+  border-top: 1px solid rgba(154, 133, 89, 0.35);
+}
+.v7-nav__item {
+  flex: 1 1 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: calc(6 * var(--u));
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--v7-color-text-muted);
+  position: relative;
+}
+/* タブの間の細い仕切り（ラフの金の縦線に相当） */
+.v7-nav__item + .v7-nav__item::before {
+  content: ''; position: absolute; left: 0; top: 22%; bottom: 22%;
+  width: 1px; background: rgba(154, 133, 89, 0.3);
+}
+/* ★狭い画面での下限（v0.9）。
+   ★46 は 1080 基準の値なので、320px 幅では 13.6px にしかなりません。
+     絵が何なのか分からない大きさです。枠の高さには下限があるのに、
+     中の絵には無かったので、そこだけ縮み続けていました。 */
+.v7-nav__icon {
+  width: max(calc(46 * var(--u)), 20px);
+  height: max(calc(46 * var(--u)), 20px);
+  display: block;
+}
+.v7-nav__icon svg { width: 100%; height: 100%; }
+/* ★折り返させません（v0.9）。
+   ★「ショップ」が「ショッ／プ」と割れると、他のタブと高さが変わり、
+     並びがそろわなくなります。入りきらないときは端を省きます。 */
+.v7-nav__label {
+  font-size: var(--v7-fs-caption);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.1;
+}
+
+/* 選択中（6.5）：紫系＋控えめな発光＋上辺の紫ライン */
+.v7-nav__item.is-on {
+  color: #b79bff;
+  background: var(--v7-color-accent-soft);
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.v7-nav__item.is-on::after {
+  content: ''; position: absolute; left: 12%; right: 12%; top: 0; height: 2px;
+  background: #8f6ff0; border-radius: 2px;
+}
+
+/* =====================================================================
+   タブ内の共通パネルボタン（カード／対戦／ショップ／その他）
+   ===================================================================== */
+.v7-grid { display: grid; gap: calc(20 * var(--u)); height: 100%; }
+.v7-grid--2 { grid-template-columns: 1fr 1fr; }
+
+.v7-lr { display: grid; grid-template-columns: 1.6fr 1fr; gap: calc(20 * var(--u)); height: 100%; }
+.v7-lr__main { height: 100%; }
+.v7-lr__side { display: grid; grid-template-rows: 3fr 2fr; gap: calc(20 * var(--u)); }
+
+/* ★中身がはみ出さないようにします（v0.9）。
+   ★狭い画面では「プレミアムストア」が3行に割れ、
+     枠の下へあふれていました。枠の中で収めます。 */
+.v7-card-panel {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel);      /* 濃紺ベタ（作者確定） */
+  color: var(--v7-color-text);
+  font-size: var(--v7-fs-button); font-weight: 700;
+  cursor: pointer;
+  /* ★狭い画面では、余白が中身を押し出します。下限だけ残して詰めます */
+  padding: min(calc(20 * var(--u)), 12px);
+  text-align: center;
+}
+.v7-card-panel__label {
+  max-width: 100%;
+  line-height: 1.25;
+  overflow-wrap: anywhere;   /* 長い名前でも枠の外へ出さない */
+}
+.v7-card-panel--big { font-size: var(--v7-fs-panel); }
+.v7-card-panel--soon { opacity: 0.9; }
+.v7-card-panel__arrow {
+  position: absolute; right: calc(20 * var(--u)); bottom: calc(16 * var(--u));
+  font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted);
+}
+.v7-card-panel__badge {
+  position: absolute; right: calc(16 * var(--u)); top: calc(16 * var(--u));
+  font-size: var(--v7-fs-caption); padding: calc(4 * var(--u)) calc(14 * var(--u)); border-radius: calc(18 * var(--u));
+  background: rgba(124, 41, 51, 0.5);
+  border: 1px solid rgba(200, 90, 90, 0.4);
+  color: #f2d6d6;
+}
+.v7-card-panel:active { filter: brightness(1.12); }   /* 押下フィードバック（3.5） */
+
+/* =====================================================================
+   ホームタブ（第7部・ラフ実寸1080基準）
+   ===================================================================== */
+/* パネル領域（幅=1040=1080-左右20, 高さ=548）の中を
+   上段バナー行120 + 間20 + ミッション408 に割る。 */
+.v7-home { position: relative; width: 100%; height: 100%; }
+
+/* 上段：バナー760 + 間20 + お知らせ120 + 間20 + プレゼント120 の横一列 */
+.v7-home__top {
+  position: absolute;
+  left: 0; top: 0; right: 0;
+  height: calc(120 * var(--u));
+  display: flex;
+  gap: calc(20 * var(--u));
+}
+
+/* バナー 760×120（細い横長） */
+.v7-banner {
+  position: relative;
+  width: calc(760 * var(--u));
+  height: 100%;
+  flex: 0 0 auto;
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel);
+  overflow: hidden;
+}
+.v7-banner__track { display: flex; height: 100%; will-change: transform; touch-action: pan-y; }
+.v7-banner__slide {
+  flex: 0 0 100%;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; color: var(--v7-color-text);
+  font-size: var(--v7-fs-button); font-weight: 700; cursor: pointer;
+  padding: 0 calc(24 * var(--u)) calc(20 * var(--u)); text-align: center;
+}
+.v7-banner__dots {
+  position: absolute; left: 0; right: 0; bottom: calc(12 * var(--u));
+  display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u));
+  pointer-events: none;
+}
+.v7-banner__dot {
+  width: calc(10 * var(--u)); height: calc(10 * var(--u)); border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  transition: all 0.4s ease;
+}
+.v7-banner__dot.is-on {
+  width: calc(28 * var(--u)); border-radius: calc(5 * var(--u));
+  background: #8f6ff0;
+}
+
+/* お知らせ／プレゼント（各120×120の正方形。バナーと横一列） */
+.v7-home__side { display: flex; gap: calc(20 * var(--u)); flex: 0 0 auto; height: 100%; }
+.v7-home__sidebtn {
+  width: calc(120 * var(--u));
+  height: 100%;                             /* =120*--u（正方形） */
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel);
+  color: var(--v7-color-text);
+  font-size: var(--v7-fs-caption); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(8 * var(--u)); text-align: center;
+}
+.v7-home__sidebtn:active { filter: brightness(1.12); }
+
+/* ミッションパネル 1080×408（上段の下、間20） */
+.v7-mission {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc((120 + 20) * var(--u));
+  height: calc(408 * var(--u));
+  display: flex; flex-direction: column;
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-panel);
+  overflow: hidden;
+}
+.v7-mission__tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(154, 133, 89, 0.28);
+}
+.v7-mission__tab {
+  flex: 1 1 0; height: calc(80 * var(--u));
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--v7-color-text-muted); font-size: var(--v7-fs-body);
+  position: relative;
+}
+.v7-mission__tab + .v7-mission__tab::before {
+  content: ''; position: absolute; left: 0; top: 24%; bottom: 24%; width: 1px;
+  background: rgba(154, 133, 89, 0.28);
+}
+.v7-mission__tab.is-on { color: var(--v7-color-text); font-weight: 700; }
+.v7-mission__tab.is-on::after {
+  content: ''; position: absolute; left: 20%; right: 20%; bottom: 0; height: 2px;
+  background: #8f6ff0; border-radius: 2px;
+}
+.v7-mission__list {
+  flex: 1 1 auto;
+  overflow-y: auto;          /* 枠内だけ縦スクロール（7.6） */
+  overscroll-behavior: contain;
+  padding: calc(6 * var(--u)) calc(24 * var(--u));
+}
+.v7-mission__row {
+  display: flex; align-items: center; justify-content: space-between; gap: calc(16 * var(--u));
+  padding: calc(20 * var(--u)) calc(4 * var(--u));
+  border-bottom: 1px solid rgba(154, 133, 89, 0.14);
+  font-size: var(--v7-fs-body);
+}
+.v7-mission__row[data-state="done"] { opacity: 0.55; }
+.v7-mission__text { flex: 1 1 auto; }
+.v7-mission__right { flex: 0 0 auto; }
+.v7-mission__prog { font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted); font-variant-numeric: tabular-nums; }
+.v7-mission__done { font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted); }
+.v7-mission__claim {
+  min-height: calc(56 * var(--u)); padding: calc(6 * var(--u)) calc(24 * var(--u));
+  border-radius: calc(24 * var(--u));
+  border: 1px solid var(--v7-color-accent);
+  background: var(--v7-color-accent-soft);
+  color: #d9c9ff; font-size: var(--v7-fs-caption); cursor: pointer;
+}
+
+/* =====================================================================
+   個別画面（Stage 3・第12〜17部）
+   ---------------------------------------------------------------------
+   ハブ(z:10)より上、暗転(z:60)より下に敷く。これで遷移の暗転が
+   個別画面の上にかぶさり、暗転中に中身を差し替えられる。
+   ダイアログ(z:70)は個別画面の上に出る。
+   ===================================================================== */
+.v7-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--v7-color-bg);
+}
+
+/* 共通固定ヘッダー（15.1）。上部セーフエリアを含めて固定。 */
+.v7-screen__header {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  /* 戻るボタン（44px下限）が収まる高さを保証する */
+  height: max(calc(120 * var(--u)), calc(var(--v7-tap-min) + 12px));
+  padding: 0 calc(20 * var(--u));
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: content-box;
+  background: var(--v7-color-panel);
+  border-bottom: 1px solid rgba(154, 133, 89, 0.28);
+}
+.v7-screen__back {
+  flex: 0 0 auto;
+  /* タップ下限44pxを保証（第3部 3.4） */
+  width: max(calc(84 * var(--u)), var(--v7-tap-min));
+  height: max(calc(84 * var(--u)), var(--v7-tap-min));
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--v7-color-text);
+  border-radius: 50%;
+}
+.v7-screen__back:active { background: rgba(255,255,255,0.08); }
+.v7-screen__back svg { width: calc(48 * var(--u)); height: calc(48 * var(--u)); }
+.v7-screen__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--v7-fs-title);
+  font-weight: 700;
+  color: var(--v7-color-text);
+  font-family: var(--v7-font-title);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v7-screen__right { flex: 0 0 auto; display: flex; align-items: center; gap: calc(12 * var(--u)); }
+.v7-screen__rightbtn {
+  min-height: calc(72 * var(--u));
+  padding: calc(8 * var(--u)) calc(28 * var(--u));
+  border-radius: var(--v7-radius-medium);
+  border: 1px solid var(--v7-color-border-gold);
+  background: var(--v7-color-accent-soft);
+  color: var(--v7-color-text);
+  font-size: var(--v7-fs-button); cursor: pointer;
+}
+
+/* 個別画面の通知アンカー（ヘッダー直下：16.3）。実体は共通トーストが担う。 */
+.v7-screen__toast { position: absolute; left: 0; right: 0; top: 0; height: 0; }
+
+/* スクロールする本文（ヘッダー下だけ動く：15.1） */
+.v7-screen__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: calc(28 * var(--u)) calc(28 * var(--u));
+  padding-bottom: calc(40 * var(--u) + env(safe-area-inset-bottom, 0px));
+}
+.v7-screen__section {
+  font-size: var(--v7-fs-caption);
+  color: var(--v7-color-text-muted);
+  letter-spacing: 0.04em;
+  margin: calc(28 * var(--u)) 0 calc(14 * var(--u));
+}
+.v7-screen__section:first-child { margin-top: 0; }
+.v7-screen__note {
+  margin: calc(24 * var(--u)) 0 0;
+  font-size: var(--v7-fs-caption);
+  line-height: 1.6;
+  color: var(--v7-color-text-muted);
+}
+
+/* 横長リスト項目（設定ハブ・ヘルプ：14.1/14.2） */
+.v7-listrow {
+  width: 100%;
+  display: flex; align-items: center; gap: calc(16 * var(--u));
+  text-align: left;
+  padding: calc(24 * var(--u)) calc(28 * var(--u));
+  margin-bottom: calc(16 * var(--u));
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid rgba(154, 133, 89, 0.28);
+  background: var(--v7-color-panel);
+  color: var(--v7-color-text);
+  cursor: pointer;
+}
+.v7-listrow:active { filter: brightness(1.12); }
+.v7-listrow__main { flex: 1 1 auto; display: flex; flex-direction: column; gap: calc(6 * var(--u)); min-width: 0; }
+.v7-listrow__name { font-size: var(--v7-fs-body); font-weight: 600; }
+.v7-listrow__desc { font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted); line-height: 1.4; }
+.v7-listrow__arrow { flex: 0 0 auto; font-size: var(--v7-fs-panel); color: var(--v7-color-text-muted); }
+.v7-listrow__soon {
+  flex: 0 0 auto;
+  font-size: var(--v7-fs-caption);
+  padding: calc(4 * var(--u)) calc(16 * var(--u));
+  border-radius: calc(20 * var(--u));
+  border: 1px solid var(--v7-color-border-gold);
+  color: var(--v7-color-text-muted);
+}
+/* 準備中の設定は通常の明度で表示（14.1：暗くしない） */
+
+/* アコーディオン（用語集・FAQ：14.3/14.4） */
+.v7-acc__item {
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid rgba(154, 133, 89, 0.28);
+  background: var(--v7-color-panel);
+  margin-bottom: calc(14 * var(--u));
+  overflow: hidden;
+}
+.v7-acc__head {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: calc(16 * var(--u));
+  text-align: left;
+  padding: calc(24 * var(--u)) calc(28 * var(--u));
+  border: none; background: transparent; cursor: pointer;
+  color: var(--v7-color-text);
+}
+.v7-acc__head:active { background: rgba(255,255,255,0.05); }
+.v7-acc__term { flex: 1 1 auto; font-size: var(--v7-fs-body); font-weight: 600; }
+.v7-acc__mark { flex: 0 0 auto; font-size: var(--v7-fs-panel); color: var(--v7-color-text-muted); line-height: 1; }
+.v7-acc__panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.v7-acc__desc {
+  padding: 0 calc(28 * var(--u)) calc(26 * var(--u));
+  font-size: var(--v7-fs-body);
+  line-height: 1.65;
+  color: var(--v7-color-text-muted);
+  white-space: pre-wrap;
+}
+
+/* プロフィール（第12部） */
+.v7-prof {
+  display: flex; flex-direction: column; align-items: center;
+  padding: calc(24 * var(--u)) 0 calc(30 * var(--u));
+}
+.v7-prof__icon {
+  width: calc(220 * var(--u)); height: calc(220 * var(--u));
+  border-radius: 50%;
+  background: #2a3350;
+  border: 2px solid var(--v7-color-border-gold);
+  display: flex; align-items: center; justify-content: center;
+  color: #5b6b95;
+  overflow: hidden;
+}
+.v7-prof__icon svg { width: calc(150 * var(--u)); height: calc(150 * var(--u)); }
+.v7-prof__name { margin-top: calc(20 * var(--u)); font-size: var(--v7-fs-title); font-weight: 700; color: var(--v7-color-text); }
+.v7-prof__title { margin-top: calc(8 * var(--u)); font-size: var(--v7-fs-body); color: #d9c9ff; }
+.v7-prof__idrow {
+  margin-top: calc(28 * var(--u));
+  display: flex; align-items: center; gap: calc(14 * var(--u));
+  padding: calc(16 * var(--u)) calc(24 * var(--u));
+  border-radius: var(--v7-radius-medium);
+  border: 1px solid rgba(154, 133, 89, 0.28);
+  background: var(--v7-color-panel);
+  max-width: 100%;
+}
+.v7-prof__idlabel { font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted); flex: 0 0 auto; }
+.v7-prof__idval {
+  font-size: var(--v7-fs-body); font-weight: 600; letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums; color: var(--v7-color-text);
+  -webkit-user-select: all; user-select: all;
+}
+.v7-prof__copy {
+  flex: 0 0 auto;
+  min-height: calc(64 * var(--u));
+  padding: calc(6 * var(--u)) calc(22 * var(--u));
+  border-radius: calc(20 * var(--u));
+  border: 1px solid var(--v7-color-accent);
+  background: var(--v7-color-accent-soft);
+  color: #d9c9ff; font-size: var(--v7-fs-caption); cursor: pointer;
+}
+.v7-prof__fav {
+  width: 100%;
+  display: flex; align-items: center; gap: calc(20 * var(--u));
+  text-align: left;
+  padding: calc(20 * var(--u));
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid rgba(154, 133, 89, 0.28);
+  background: var(--v7-color-panel);
+  color: var(--v7-color-text);
+  cursor: pointer;
+}
+.v7-prof__favimg {
+  flex: 0 0 auto;
+  width: calc(120 * var(--u)); height: calc(168 * var(--u));
+  border-radius: calc(12 * var(--u));
+  background: linear-gradient(160deg, #2a2140, #14101f);
+  border: 1px solid var(--v7-color-border-gold);
+}
+.v7-prof__favname { font-size: var(--v7-fs-body); font-weight: 600; }
+
+/* お知らせ（第13部） */
+.v7-news__row {
+  width: 100%;
+  display: flex; flex-direction: column; gap: calc(10 * var(--u));
+  text-align: left;
+  padding: calc(24 * var(--u)) calc(24 * var(--u));
+  margin-bottom: calc(14 * var(--u));
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid rgba(154, 133, 89, 0.28);
+  background: var(--v7-color-panel);
+  color: var(--v7-color-text);
+  cursor: pointer;
+}
+.v7-news__row:active { filter: brightness(1.12); }
+.v7-news__meta { display: flex; align-items: center; gap: calc(14 * var(--u)); }
+.v7-news__date { font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted); font-variant-numeric: tabular-nums; }
+.v7-news__cat {
+  font-size: var(--v7-fs-caption);
+  padding: calc(3 * var(--u)) calc(14 * var(--u));
+  border-radius: calc(16 * var(--u));
+  color: #f2eee4;
+}
+.v7-news__cat--update    { background: rgba(118, 80, 200, 0.5); }
+.v7-news__cat--howto     { background: rgba(60, 130, 110, 0.5); }
+.v7-news__cat--important { background: rgba(150, 60, 60, 0.55); }
+.v7-news__cat--dev       { background: rgba(80, 100, 150, 0.5); }
+.v7-news__title { font-size: var(--v7-fs-body); font-weight: 600; line-height: 1.4; }
+
+.v7-newsdet__title { margin: 0 0 calc(14 * var(--u)); font-size: var(--v7-fs-title); font-weight: 700; color: var(--v7-color-text); line-height: 1.35; }
+.v7-newsdet__meta { display: flex; align-items: center; gap: calc(14 * var(--u)); margin-bottom: calc(24 * var(--u)); }
+.v7-newsdet__date { font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted); }
+.v7-newsdet__body { font-size: var(--v7-fs-body); line-height: 1.7; color: var(--v7-color-text); white-space: pre-wrap; }
+
+/* 選択画面のタイル（第9部）。準備中は暗め＋彩度落ち＋バッジ（9.3） */
+.v7-lr--screen { height: calc(560 * var(--u)); }
+.v7-tile {
+  position: relative;
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(20 * var(--u));
+  border-radius: var(--v7-panel-radius);
+  border: 1px solid rgba(154, 133, 89, 0.3);
+  background: var(--v7-color-panel);
+  color: var(--v7-color-text);
+  font-size: var(--v7-fs-button); font-weight: 600;
+  cursor: pointer;
+}
+.v7-tile:active { filter: brightness(1.12); }
+.v7-tile--soon { filter: saturate(0.55) brightness(0.82); }
+.v7-tile--soon:active { filter: saturate(0.55) brightness(0.95); }
+.v7-tile__label { text-align: center; }
+.v7-tile__badge {
+  position: absolute; top: calc(14 * var(--u)); right: calc(14 * var(--u));
+  font-size: var(--v7-fs-caption);
+  padding: calc(3 * var(--u)) calc(14 * var(--u));
+  border-radius: calc(16 * var(--u));
+  border: 1px solid var(--v7-color-border-gold);
+  color: var(--v7-color-text-muted);
+  background: rgba(0,0,0,0.35);
+}
+/* 選択画面グリッド内のタイルは高さを持たせる */
+.v7-grid .v7-tile { min-height: calc(230 * var(--u)); }
+
+/* クレジット（第14部 14.5） */
+.v7-credits__game { font-size: var(--v7-fs-title); font-weight: 700; text-align: center; margin-bottom: calc(30 * var(--u)); color: var(--v7-color-text); }
+.v7-credits__row {
+  display: flex; flex-direction: column; gap: calc(4 * var(--u));
+  padding: calc(18 * var(--u)) calc(8 * var(--u));
+  border-bottom: 1px solid rgba(154, 133, 89, 0.16);
+}
+.v7-credits__role { font-size: var(--v7-fs-caption); color: var(--v7-color-text-muted); }
+.v7-credits__name { font-size: var(--v7-fs-body); color: var(--v7-color-text); }
+
+/* =====================================================================
+   高さ700px未満のコンパクト表示（第18部 18.2）
+   ---------------------------------------------------------------------
+   縮めるもの：上部プレイヤー情報・パネル間余白・一枚絵の露出・ナビの余白
+   維持するもの：文字サイズ下限・44〜48pxのタップ領域・ミッション枠の操作性
+   コンパクトは1段階のみ。JSでの計測はせず、CSSの高さクエリだけで行う。
+   ===================================================================== */
+@media (max-height: 699px) {
+  /* 上部プレイヤー情報：高さを詰める（文字の下限は変えない） */
+  .v7-profile { height: calc(200 * var(--u)); }
+  .v7-profile__title { top: calc(120 * var(--u)); }
+
+  /* 通貨表示：縦の間隔を詰める */
+  .v7-currency { gap: calc(12 * var(--u)); }
+
+  /* パネル領域：ナビとの間隔を詰めて、そのぶん本体を広く使う */
+  .v7-panels {
+    bottom: calc(max(calc(120 * var(--u)), var(--v7-tap-min)) + calc(10 * var(--u))
+                 + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* メインナビ：高さの下限（44px）は保ったまま、内側の余白だけ詰める。
+     ★絵の下限（20px）は、ここでも外しません。
+       ★以前はここで上書きしてしまい、狭くて低い画面
+         （320×568 など）だけ絵が 11px に戻っていました。 */
+  .v7-nav__item { gap: calc(2 * var(--u)); }
+  .v7-nav__icon {
+    width: max(calc(38 * var(--u)), 20px);
+    height: max(calc(38 * var(--u)), 20px);
+  }
+
+  /* 個別画面：ヘッダーと本文の余白を1段階詰める（下限は維持） */
+  .v7-screen__body { padding: calc(20 * var(--u)) calc(24 * var(--u)); }
+  .v7-screen__section { margin: calc(18 * var(--u)) 0 calc(10 * var(--u)); }
+  .v7-listrow { padding: calc(18 * var(--u)) calc(24 * var(--u)); margin-bottom: calc(12 * var(--u)); }
+}
+/* =====================================================================
+   23. 動きを減らす設定（prefers-reduced-motion）
+   ---------------------------------------------------------------------
+   ・ローディング文字のウェーブ停止
+   ・暗転を短縮
+   ・押下時の明度変化は維持（ここでは特に無効化しない）
+   ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .v7-loading__text span { animation: none; }
+  .v7-wipe { transition-duration: 0.08s; }
+  .v7-xfade { transition-duration: 0.08s; }
+  .v7-loading--fade { transition-duration: 0.15s; }
+  .v7-toast { transition-duration: 0.08s; }
+  .v7-art__veil { transition-duration: 0.12s; }
+  .v7-slide-out-left, .v7-slide-out-right, .v7-slide-center { transition-duration: 0.12s; }
+  .v7-banner__track { transition-duration: 0.12s !important; }
+  .v7-banner__dot { transition-duration: 0.12s; }
+  .v7-nav__item.is-on { transition-duration: 0.12s; }
+}
+
+
+/* =====================================================================
+   ★v0.8：タイトル画面
+   ---------------------------------------------------------------------
+   v0.7 では、起動するとローディングを挟んですぐメインハブが出ていました。
+   （旧タイトル画面 #screen-start は器に覆われて到達できなくなっています）
+
+   v0.8 では作者の希望により、起動の入口としてタイトル画面を置きます。
+       タイトル → タップ → 読み込み中 → メインハブ
+
+   ・背景は黒一色（作者指定）
+   ・ロゴ／版／「タップしてスタート」を縦に並べる
+   ・毎回表示する
+   ・文字は第3部 3.3 の下限を守るため --v7-fs-* を使う
+   ===================================================================== */
+.v8-title {
+  position: absolute;
+  inset: 0;
+  z-index: 60;                 /* ローディング(50)より手前 */
+  background: #000;
+  border: 0;
+  margin: 0;
+  padding: env(safe-area-inset-top, 0px) 16px
+           calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+/* タップで晴れる。下のローディング（黒）が現れるので、
+   見た目は「文字だけがすっと消える」ことになる。 */
+.v8-title--fade {
+  opacity: 0;
+  transition: opacity 0.45s ease-out;
+  pointer-events: none;
+}
+
+.v8-title__logo {
+  font-size: clamp(34px, 11cqw, 52px);
+  letter-spacing: 0.18em;
+  /* 字間を空けた分だけ右に寄るので、左へ戻して中央に見せる */
+  text-indent: 0.18em;
+  color: var(--v7-color-text);
+  text-shadow: 0 0 18px rgba(118, 80, 200, 0.45);
+}
+
+.v8-title__version {
+  font-size: var(--v7-fs-caption);
+  letter-spacing: 0.08em;
+  color: var(--v7-color-text-muted);
+}
+
+.v8-title__tap {
+  margin-top: 26px;
+  font-size: var(--v7-fs-body);
+  letter-spacing: 0.08em;
+  color: var(--v7-color-text-muted);
+  animation: v8-title-blink 2.2s ease-in-out infinite;
+}
+
+@keyframes v8-title-blink {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+/* 動きを減らす設定では明滅させない（第21部 21.2 の先取り） */
+@media (prefers-reduced-motion: reduce) {
+  .v8-title__tap { animation: none; opacity: 0.85; }
+  .v8-title--fade { transition: none; }
+}

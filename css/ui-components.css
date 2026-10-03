@@ -1,0 +1,815 @@
+/* =====================================================================
+   ui-components.css ― v0.9 共通UI部品（仕様書 16.2）
+   ---------------------------------------------------------------------
+   ★ここに書くものは、色や大きさを直接持ちません。
+     すべて css/ui-tokens.css の変数を通します。
+     ★将来ホーム画面のデザインを変えるとき、
+       トークンを差し替えれば全画面へ届くようにするためです（仕様書 1.2）。
+
+   ---------------------------------------------------------------------
+   ★この時点では、まだどの画面にも当てていません
+   ---------------------------------------------------------------------
+   既存の画面はこれまでの見た目のままです。
+   1画面ずつ差し替えていきます（そうしないと、
+   どこで見た目が変わったのか切り分けられません）。
+
+   ---------------------------------------------------------------------
+   ★守っていること
+   ---------------------------------------------------------------------
+   ・押せるものは 44px 以上（仕様書 15.2）
+   ・文字は下限つきの変数だけを使う（仕様書 3.3・15.1）
+   ・動きは --ui-motion-* を通す
+     → 「動きを減らす」設定に、何も書かなくても従います（仕様書 4.2）
+   ===================================================================== */
+
+/* =====================================================================
+   ボタン
+   ---------------------------------------------------------------------
+   4種類あります（仕様書 16.2）。
+     ui-btn              ふつう
+     ui-btn--primary     いちばん進めたい操作
+     ui-btn--danger      取り返しがつかない操作
+     :disabled           押せない
+   ===================================================================== */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-sm);
+
+  /* ★押せるものは 44px 以上。ここを緩めると小さな画面で押せません */
+  min-height: var(--ui-tap-min);
+  padding: var(--ui-space-sm) var(--ui-space-md);
+
+  border: var(--ui-border-w) solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-button);
+  font-family: inherit;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+
+  transition: background var(--ui-motion-fast) var(--ui-ease-out),
+              border-color var(--ui-motion-fast) var(--ui-ease-out),
+              transform var(--ui-motion-fast) var(--ui-ease-out);
+}
+/* ★押した手ごたえ。触れているあいだだけ少し沈みます */
+.ui-btn:active { transform: scale(0.98); background: var(--ui-panel-soft); }
+
+.ui-btn--primary {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+.ui-btn--primary:active { background: var(--ui-accent); }
+
+.ui-btn--danger {
+  border-color: var(--ui-danger);
+  color: var(--ui-text);
+}
+.ui-btn--danger:active { background: var(--ui-danger); }
+
+/* ★押せないことは、薄さと指の形の両方で示します。
+   薄いだけだと「押しても反応しないだけ」に見えます。 */
+.ui-btn:disabled,
+.ui-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+/* 幅いっぱいのボタン（画面の下に置く決定ボタンなど） */
+.ui-btn--wide { width: 100%; }
+
+/* -------------------------------------------------------------
+   アイコンだけのボタン
+   ★見た目は小さくても、押せる大きさは 44px を割りません。
+   ------------------------------------------------------------- */
+.ui-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--ui-tap-min);
+  min-height: var(--ui-tap-min);
+  padding: var(--ui-space-xs);
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text);
+  font-size: var(--ui-fs-button);
+  cursor: pointer;
+  transition: background var(--ui-motion-fast) var(--ui-ease-out);
+}
+.ui-iconbtn:active { background: var(--ui-panel-soft); }
+
+/* =====================================================================
+   パネル・見出し
+   ===================================================================== */
+.ui-panel {
+  border: var(--ui-border-w) solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-panel);
+  padding: var(--ui-space-md);
+  box-shadow: var(--ui-shadow-sm);
+}
+.ui-panel--soft { background: var(--ui-panel-soft); box-shadow: none; }
+
+.ui-heading {
+  margin: 0 0 var(--ui-space-sm);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-panel);
+  font-family: var(--ui-font-title);
+  line-height: 1.3;
+}
+.ui-heading--screen { font-size: var(--ui-fs-title); }
+
+/* 区切りの見出し（設定画面の「表示」「音」など） */
+.ui-section {
+  margin: var(--ui-space-lg) 0 var(--ui-space-sm);
+  padding-bottom: var(--ui-space-xs);
+  border-bottom: var(--ui-border-w) solid var(--ui-border);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-fs-caption);
+}
+
+.ui-text { color: var(--ui-text); font-size: var(--ui-fs-body); line-height: 1.6; }
+.ui-note { color: var(--ui-text-muted); font-size: var(--ui-fs-caption); line-height: 1.5; }
+
+/* =====================================================================
+   タブ・トグル・選択欄
+   ---------------------------------------------------------------------
+   ★選ばれていることを、色だけでなく枠でも示します。
+     色の見分けがつきにくい人にも伝わるようにするためです。
+   ===================================================================== */
+.ui-tabs { display: flex; gap: var(--ui-space-xs); }
+.ui-tab {
+  flex: 1 1 0;
+  min-height: var(--ui-tap-min);
+  padding: var(--ui-space-sm);
+  border: var(--ui-border-w) solid transparent;
+  border-bottom-color: var(--ui-border);
+  border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0;
+  background: transparent;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-fs-button);
+  cursor: pointer;
+  transition: color var(--ui-motion-fast) var(--ui-ease-out),
+              border-color var(--ui-motion-fast) var(--ui-ease-out);
+}
+.ui-tab[aria-selected="true"],
+.ui-tab.is-on {
+  border-color: var(--ui-border);
+  border-bottom-color: transparent;
+  background: var(--ui-panel);
+  color: var(--ui-text);
+}
+
+/* 2択・3択の並び（設定の「する／しない」など） */
+.ui-choices { display: flex; gap: var(--ui-space-xs); flex-wrap: wrap; }
+.ui-choice {
+  flex: 1 1 0;
+  min-width: calc(var(--ui-tap-min) * 1.6);
+  min-height: var(--ui-tap-min);
+  padding: var(--ui-space-sm);
+  border: var(--ui-border-w) solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-fs-button);
+  cursor: pointer;
+  transition: background var(--ui-motion-fast) var(--ui-ease-out),
+              color var(--ui-motion-fast) var(--ui-ease-out);
+}
+/* ★選ばれている印は is-on。既存の画面がこの名前を使っているので、
+   同じにしておけば JS を書き換えずに済みます。 */
+.ui-choice.is-on {
+  border-color: var(--ui-accent);
+  border-width: var(--ui-border-w-strong);
+  background: var(--ui-accent-soft);
+  color: var(--ui-text);
+}
+
+/* 一行の設定（左に名前、右に選択） */
+.ui-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-md);
+  min-height: var(--ui-tap-min);
+  padding: var(--ui-space-sm) 0;
+}
+.ui-row__label { color: var(--ui-text); font-size: var(--ui-fs-body); }
+.ui-row__value { color: var(--ui-text-muted); font-size: var(--ui-fs-body); }
+
+/* =====================================================================
+   共通ダイアログ（仕様書 11）
+   ---------------------------------------------------------------------
+   ★背景の幕は、押しても勝手には閉じません。
+     取り返しがつかない操作の確認で、幕を触っただけで消えると
+     「消した＝どちらを選んだのか」が分かりません（仕様書 11.3）。
+   ===================================================================== */
+.ui-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ui-space-lg);
+}
+.ui-dialog.is-open { display: flex; }
+
+.ui-dialog__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-scrim);
+  animation: ui-fade-in var(--ui-motion-base) var(--ui-ease-out);
+}
+.ui-dialog__box {
+  position: relative;
+  width: 100%;
+  max-width: var(--ui-shell-max-w);
+  border: var(--ui-border-w) solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-panel);
+  padding: var(--ui-space-lg);
+  box-shadow: var(--ui-shadow-lg);
+  animation: ui-pop-in var(--ui-motion-base) var(--ui-ease-out);
+}
+.ui-dialog__title {
+  margin: 0 0 var(--ui-space-sm);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-panel);
+}
+.ui-dialog__msg {
+  margin: 0 0 var(--ui-space-lg);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-body);
+  line-height: 1.6;
+}
+/* ★ボタンは縦に並べます。横に並べると、狭い画面で文字が折れて
+   どちらが「はい」か読み取りにくくなります。 */
+.ui-dialog__btns { display: flex; flex-direction: column; gap: var(--ui-space-sm); }
+
+/* =====================================================================
+   トースト（仕様書 11.4）
+   ---------------------------------------------------------------------
+   ★短い知らせ専用です。操作を止めません。
+     ★押す必要があることは、トーストで伝えません。
+   ===================================================================== */
+.ui-toast-area {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--ui-space-xl) + env(safe-area-inset-bottom, 0px));
+  z-index: 2100;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-sm);
+  width: min(var(--ui-shell-max-w), calc(100vw - var(--ui-space-xl)));
+  pointer-events: none;      /* ★下の操作を邪魔しません */
+}
+.ui-toast {
+  padding: var(--ui-space-sm) var(--ui-space-md);
+  border: var(--ui-border-w) solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-body);
+  text-align: center;
+  box-shadow: var(--ui-shadow-md);
+  animation: ui-rise-in var(--ui-motion-base) var(--ui-ease-out);
+}
+
+/* =====================================================================
+   読み込み中・エラー（仕様書 12.2・12.3）
+   ===================================================================== */
+.ui-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-md);
+  padding: var(--ui-space-xl);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-fs-body);
+}
+.ui-spinner {
+  width: calc(var(--ui-space-xl) + var(--ui-space-sm));
+  height: calc(var(--ui-space-xl) + var(--ui-space-sm));
+  border: var(--ui-border-w-strong) solid var(--ui-panel-soft);
+  border-top-color: var(--ui-border);
+  border-radius: 50%;
+  animation: ui-spin 0.9s linear infinite;
+}
+/* ★動きを減らす設定でも、読み込み中であることは伝えます。
+   回すのをやめ、明るさの変化だけにします。
+   （まとめて下の「動きを減らす」の節で指定しています） */
+
+.ui-error {
+  border: var(--ui-border-w) solid var(--ui-danger);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-panel);
+  padding: var(--ui-space-lg);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-body);
+  line-height: 1.6;
+}
+/* ★何が起きたかだけでなく、次に何ができるかを必ず添えます */
+.ui-error__actions { margin-top: var(--ui-space-lg); }
+
+/* =====================================================================
+   画面の切り替え（仕様書 4.1）
+   ---------------------------------------------------------------------
+   個別画面は右から入り、戻るときは逆へ。
+   ★操作待ちを感じさせない短さにします。
+   ===================================================================== */
+.ui-screen-enter { animation: ui-slide-in-right var(--ui-motion-base) var(--ui-ease-out); }
+.ui-screen-leave { animation: ui-slide-out-right var(--ui-motion-base) var(--ui-ease-in); }
+.ui-fade-enter { animation: ui-fade-in var(--ui-motion-base) var(--ui-ease-out); }
+
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ui-rise-in {
+  from { opacity: 0; transform: translateY(var(--ui-space-md)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ui-slide-in-right {
+  from { opacity: 0; transform: translateX(var(--ui-space-xl)); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes ui-slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(var(--ui-space-xl)); }
+}
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+@keyframes ui-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* ★動きを減らす設定のとき。
+   出入りの時間は --ui-motion-* が 0s になるので、自動で即時になります。
+   ここで指定するのは「繰り返し動き続けるもの」だけです（仕様書 4.2）。
+   ★読み込み中であることは伝え続けます。回すのをやめ、明るさだけ変えます。 */
+.v7-root.is-reduce-motion .ui-spinner { animation: ui-pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-spinner { animation: ui-pulse 1.2s ease-in-out infinite; }
+}
+
+/* =====================================================================
+   ★設定の1行（v0.9・ホーム画面の設定から使います）
+   ---------------------------------------------------------------------
+   「名前 ＋ 説明 ＋ 選ぶところ」を縦に積みます。
+   ★横一列にしないのは、説明が長い項目があるためです。
+     狭い画面で名前と選択肢が押し合うと、どちらも読めなくなります。
+   ===================================================================== */
+.v7-setrow {
+  padding: var(--ui-space-md) 0;
+  border-bottom: var(--ui-border-w) solid var(--ui-panel-soft);
+}
+.v7-setrow:last-child { border-bottom: 0; }
+
+.v7-setrow__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-space-sm);
+}
+.v7-setrow__name { color: var(--ui-text); font-size: var(--ui-fs-body); }
+.v7-setrow__value { color: var(--ui-text-muted); font-size: var(--ui-fs-body); }
+
+.v7-setrow__desc {
+  margin: var(--ui-space-xs) 0 var(--ui-space-sm);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-fs-caption);
+  line-height: 1.5;
+}
+
+/* ★つまみは指で掴める高さにします */
+.v7-setrow__range {
+  width: 100%;
+  height: var(--ui-tap-min);
+  accent-color: var(--ui-accent);
+}
+
+/* =====================================================================
+   ★文字を入れるところ（v0.9）
+   ===================================================================== */
+.ui-input {
+  min-height: var(--ui-tap-min);
+  padding: var(--ui-space-sm) var(--ui-space-md);
+  border: var(--ui-border-w) solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-panel-soft);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-body);
+  font-family: inherit;
+}
+.ui-input::placeholder { color: var(--ui-text-muted); }
+
+/* ★条件を消すボタンは、ほかの絞り込みと役割が違います。
+   同じ形のまま並べると、押すと「その条件が付く」ように見えます。 */
+.ui-choice--clear {
+  flex: 0 0 auto;
+  border-style: dashed;
+  color: var(--ui-text-muted);
+}
+
+/* =====================================================================
+   ★カード一覧の絞り込み（v0.9 で作り直し）
+   ---------------------------------------------------------------------
+   前は「カード名 → 特徴 → 種類 → コスト → 並び」を縦に積んでいて、
+   ★画面の下半分が絞り込みで埋まり、カードがほとんど見えませんでした。
+
+   ふだん出すのは、カード名の欄と四角いボタンの1行だけにします。
+   四角いボタンを押すと、絞り込みの板がせり上がります。
+   ===================================================================== */
+
+/* ---- ふだん出ている1行 ---- */
+.clbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: var(--ui-space-sm);
+  padding: var(--ui-space-sm) var(--ui-space-md);
+  border-top: var(--ui-border-w) solid var(--ui-border);
+  background: var(--ui-panel);
+}
+.clbar__search { flex: 1 1 auto; min-width: 0; }
+
+/* ★四角いボタン。カード名の欄と同じ高さ、同じだけの幅にします */
+.clbar__toggle {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--ui-tap-min);
+  min-width: var(--ui-tap-min);
+  padding: 0;
+}
+.clbar__icon { font-size: var(--ui-fs-panel); line-height: 1; }
+
+/* ★いくつ絞り込んでいるかを出します。
+   板を下ろすと条件が見えなくなるので、これが無いと
+   「なぜ少ししか出ていないのか」が分からなくなります。 */
+.clbar__toggle.is-filtering { border-color: var(--ui-accent); }
+.clbar__badge {
+  position: absolute;
+  top: calc(var(--ui-space-xs) * -1);
+  right: calc(var(--ui-space-xs) * -1);
+  min-width: var(--ui-space-lg);
+  padding: 0 var(--ui-space-xs);
+  border-radius: 999px;
+  background: var(--ui-accent);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-caption);
+  line-height: var(--ui-space-lg);
+  text-align: center;
+}
+.clbar__badge[hidden] { display: none; }
+
+/* ---- せり上がる板 ---- */
+.clfilter {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: none;
+}
+.clfilter.is-open { display: block; }
+
+/* ★板の外を触ったら閉じます。選びかけは捨てます（効かせません）。
+   「絞り込み」を押していないので、効かせるほうが驚きになります。 */
+.clfilter__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-scrim);
+  animation: ui-fade-in var(--ui-motion-base) var(--ui-ease-out);
+}
+
+.clfilter__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 78%;
+  border-top: var(--ui-border-w-strong) solid var(--ui-border);
+  border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0;
+  background: var(--ui-panel);
+  box-shadow: var(--ui-shadow-lg);
+  animation: ui-slide-up var(--ui-motion-base) var(--ui-ease-out);
+}
+@keyframes ui-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.clfilter__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--ui-space-md);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border) transparent;
+}
+
+/* ★板のいちばん下。カード名の欄のすぐ上に来ます。
+   転がしても、ここだけは動きません。 */
+.clfilter__foot {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--ui-space-sm);
+  padding: var(--ui-space-md);
+  border-top: var(--ui-border-w) solid var(--ui-border);
+}
+.clfilter__reset { flex: 1 1 0; }
+/* ★「絞り込み」を広くします。こちらが進める操作だからです */
+.clfilter__apply { flex: 2 1 0; }
+
+/* 絞り込みの1行（見出し ＋ 中身）。特徴の欄だけ全幅 */
+.cltools__row--full { grid-template-columns: calc(108px) 1fr; }
+
+/* =====================================================================
+   ★注意を伝えるかたまり（v0.9）
+   ---------------------------------------------------------------------
+   デッキの不備など「直さないと使えない」ことを伝えます。
+   ★危険（取り返しがつかない）とは別の色にします。
+     同じ赤にすると、読むだけの案内と、押すと消えるものが同じ顔になります。
+   ===================================================================== */
+.ui-alert {
+  border: var(--ui-border-w) solid var(--ui-warn);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-panel-soft);
+  padding: var(--ui-space-md);
+}
+.ui-alert__title { color: var(--ui-warn); font-size: var(--ui-fs-body); font-weight: bold; }
+.ui-alert__item { color: var(--ui-text); font-size: var(--ui-fs-caption); line-height: 1.6; }
+
+/* =====================================================================
+   ★デッキ編集の作り込み（v0.9・作者の指摘）
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   ★下の帯のカードを大きく、デッキ側とのすき間を詰める
+   ---------------------------------------------------------------------
+   ★ここは「絵を見て選ぶ」ための並びです。
+     デッキ側（並んだ結果を見るところ）より大きいほうが選びやすく、
+     近いほうが「ここから運ぶ」という関係が読み取れます。
+   --------------------------------------------------------------------- */
+#screen-deck-edit .dband__card { width: 210px; }   /* 170 → 210 */
+#screen-deck-edit .dband { padding: 10px 20px; gap: 10px; }
+#screen-deck-edit .dedit__gridwrap { padding-bottom: 2px; }
+
+/* ---------------------------------------------------------------------
+   ★絞り込みの行を、押して開く形にする
+   ---------------------------------------------------------------------
+   ★種類・コスト・並びの3つとも、同じ形にそろえます。
+     1つだけ選ぶもの（並び）と、いくつでも選べるもの（種類・コスト）が
+     混ざっていても、押しかたは同じにします。
+
+   ★開いた中身は「下へ重ねて」出します。
+     板の中に押し込むと、板そのものが伸びて、
+     ★上に置いてある行までせり上がってしまいます。見ていて落ち着きません。
+     重ねれば、板の高さは変わりません。
+
+     ほかの行を押したいときは、いったん閉じてもらいます。
+   --------------------------------------------------------------------- */
+.ui-drop {
+  position: relative;
+  border-bottom: var(--ui-border-w) solid var(--ui-panel-soft);
+}
+.ui-drop:last-child { border-bottom: 0; }
+/* ★開いている行だけを前に出します。でないと下の行に隠れます */
+.ui-drop.is-open { z-index: 2; }
+
+.ui-drop__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-sm);
+  width: 100%;
+  min-height: var(--ui-tap-min);
+  padding: var(--ui-space-sm) 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font-size: var(--ui-fs-body);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ui-drop__now {
+  flex: 1 1 auto;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-fs-caption);
+  text-align: right;
+}
+/* ★開いているかどうかを、印の向きで示します */
+.ui-drop__mark { color: var(--ui-text-muted); transition: transform var(--ui-motion-fast); }
+.ui-drop.is-open .ui-drop__mark { transform: rotate(180deg); }
+
+/* ★下へ重ねて出します。板の高さは変わりません */
+.ui-drop__body {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 3;
+  padding: var(--ui-space-sm);
+  border: var(--ui-border-w) solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-panel);
+  box-shadow: var(--ui-shadow-md);
+}
+.ui-drop.is-open .ui-drop__body {
+  display: block;
+  animation: ui-fade-in var(--ui-motion-fast) var(--ui-ease-out);
+}
+
+/* ---------------------------------------------------------------------
+   ★選んだカードの表示（デッキ編集）
+   ---------------------------------------------------------------------
+   ★数値を文字で並べるのはやめました。
+     カードの絵に、種類もコストもスピードも体力も特徴も効果も
+     すべて印刷されています。同じことを下に書き写すと、
+     同じ情報が2回並ぶだけで、そのぶん絵が小さくなります。
+
+   ★かわりに、絵の文字が読める大きさまで拡げます。
+   --------------------------------------------------------------------- */
+#screen-deck-edit .dedetail__img {
+  width: min(560px, 82%);
+  height: auto;
+  aspect-ratio: 744 / 1039;
+  object-fit: contain;
+  border-radius: var(--ui-radius-sm);
+}
+
+/* ★コストは10個あるので、5列×2段にします。
+   1列に10個並べると1つずつが細くなり、指では狙えません。 */
+.ui-choices--cost { display: grid; grid-template-columns: repeat(5, 1fr); }
+.ui-choices--cost .ui-choice { min-width: 0; }
+
+/* ★エラーの1行。文字だけの案内なので、飾りは控えめにします。
+   ★何も無いときは場所も取りません（空の枠だけが残ると気になります）。 */
+.menu__error.ui-alert:empty { display: none; border: 0; padding: 0; }
+.menu__error.ui-alert {
+  border-color: var(--ui-danger);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-body);
+}
+
+/* ★大きな選択肢（チュートリアルの基本編・実践編など）は、
+   共通ボタンを当てるのをやめました（v0.9・作者の指摘）。
+
+   ★あれは「名前44px＋説明26px」という、独自の作りです。
+     そこへ共通ボタンを重ねると、余白も文字も別の決まりで
+     上書きされ、★1つあたりが画面いっぱいの大きさになりました。
+
+       最低の高さ  125（設計px）
+       余白         45（もとは 30/34）
+       説明の文字   34（もとは 26）
+
+   ★形が違うものに、同じ部品を当てるのは無理があります。
+     こういうものは、そのままにしておきます。 */
+
+/* =====================================================================
+   ★タイトル・読み込み中・エラー（v0.9 Phase 4・仕様書 12）
+   ---------------------------------------------------------------------
+   ★ここも共通の色と間合いへそろえます。
+     起動から終了まで、ひと続きの製品に見せるためです。
+   ===================================================================== */
+
+/* ---- タイトル（12.1） ----
+   ★専用イラストはまだ使いません。濃紺の地に、控えめな金の飾り。
+   将来ここへ絵を入れられるよう、背景は1か所で決めています。 */
+#v8-title {
+  background:
+    radial-gradient(120% 80% at 50% 18%, var(--ui-glow-gold), transparent 60%),
+    var(--ui-bg);
+  color: var(--ui-text);
+}
+#v8-title .v8-title__logo { color: var(--ui-text); }
+#v8-title .v8-title__version { color: var(--ui-text-muted); font-size: var(--ui-fs-caption); }
+
+/* ★「タップして開始」は、ロゴより目立たせません（12.1）。
+   ゆっくり明滅させ、動きを減らす設定では止めます。 */
+#v8-title .v8-title__tap {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-fs-body);
+  animation: ui-blink 2.4s ease-in-out infinite;
+}
+@keyframes ui-blink { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+.v7-root.is-reduce-motion #v8-title .v8-title__tap { animation: none; opacity: 0.75; }
+@media (prefers-reduced-motion: reduce) {
+  #v8-title .v8-title__tap { animation: none; opacity: 0.75; }
+}
+
+/* 金の細い罫。ロゴの上下に1本ずつ */
+#v8-title .v8-title__logo::before,
+#v8-title .v8-title__logo::after {
+  content: '';
+  display: block;
+  width: 40%;
+  margin: var(--ui-space-md) auto;
+  border-top: var(--ui-border-w) solid var(--ui-border);
+  opacity: 0.6;
+}
+
+/* ---- 読み込み中（12.2） ---- */
+#v7-loading { background: var(--ui-bg); color: var(--ui-text); }
+#v7-loading .v7-loading__text { color: var(--ui-text); }
+
+/* ---- 読み込み失敗・重大エラー（12.3） ----
+   ★何が起きたかだけでなく、次に何ができるかを必ず添えます。 */
+.v7-loading__fail {
+  max-width: var(--ui-shell-max-w);
+  margin: 0 auto;
+  padding: var(--ui-space-lg);
+  border: var(--ui-border-w) solid var(--ui-danger);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-body);
+  line-height: 1.6;
+}
+.v7-loading__retry {
+  width: 100%;
+  min-height: var(--ui-tap-min);
+  margin-top: var(--ui-space-lg);
+  border: var(--ui-border-w) solid var(--ui-accent);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-accent-soft);
+  color: var(--ui-text);
+  font-size: var(--ui-fs-button);
+  font-family: inherit;
+}
+
+/* =====================================================================
+   ★狭い画面で、横並びのボタンの文字が折れる（v0.9・320px で確認）
+   ---------------------------------------------------------------------
+   ★共通の余白（16px）は、ふつうの幅ではちょうどよくても、
+     4つ横に並ぶボタンでは中身を押し出します。
+     320px 幅では、1つあたり 72px しかありません。
+
+   折り返すと高さが変わり、隣のボタンと段差ができます。
+   ★折り返させず、余白を詰めて中身を優先します。
+   ===================================================================== */
+/* ★横に並ぶボタンだけ、折り返させません。
+   ★すべての共通ボタンに掛けると、説明を持つ大きなボタンで
+     文字が1行に伸びてしまいます。 */
+.dvfoot__btn.ui-btn,
+.clfilter__foot .ui-btn,
+.clbar__toggle { white-space: nowrap; }
+
+/* 横に3つ以上並ぶところ（デッキ詳細の下・対戦画面の右上など） */
+.dvfoot__btn.ui-btn {
+  padding-left: var(--ui-space-xs);
+  padding-right: var(--ui-space-xs);
+  min-width: 0;
+}
+
+/* ★対戦画面の「設定」「ログ」「メイン終了」。
+   Phase 6 で絵に置き換える予定ですが、それまでのあいだ、
+   文字が枠から出たままにはしません。 */
+.v8-btn {
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =====================================================================
+   ★絵のボタン（v0.9 Phase 6）
+   ---------------------------------------------------------------------
+   ★文字が枠に入りきらないボタンを、絵に置き換えました。
+     320px 幅では、ボタンの幅が 40〜60px しかありません。
+
+   ★絵は線だけで、色は currentColor に任せます。
+     押せないときの薄さも、選ばれているときの色も、
+     ボタン側の指定がそのまま絵にも効きます。
+   ===================================================================== */
+.ui-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* ★文字が入っていた前提の余白を外します。絵は中央に置きます */
+  padding: 0;
+  line-height: 0;
+}
+.ui-icon svg {
+  /* ★枠の7割弱。小さすぎると何の絵か分からず、
+     大きすぎると枠に触れて窮屈に見えます。
+     ★枠は 33〜53px なので、上限は要りません（枠に比例させます）。 */
+  width: 68%;
+  height: 68%;
+}
+/* ★ここで大きさは決めません（v0.9・作者の指摘）。
+   ★下限を敷いたら、もとの設計より大きくなってしまいました。
+     380px 幅で 38.7px → 44px。1割以上ふくらみます。
+
+   これらのボタンは、文字だったころから同じ大きさです。
+   ★絵にしたことで大きさが変わるのは、置き換えのやりすぎです。
+     大きさはボタン側の指定にまかせます。 */

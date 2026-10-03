@@ -1,0 +1,114 @@
+/* =====================================================================
+   ★Stage 7：調整パネル（?tune=1 のときだけ出ます）
+   ---------------------------------------------------------------------
+   遊ぶ人には出ません。焼き込みが済んだら、このかたまりごと消せます。
+
+   ★ここだけは実寸の px で書きます。
+     調整パネル自身が --u で伸び縮みすると、盤面を小さくしたときに
+     パネルまで小さくなって、指で動かせなくなります。
+   ===================================================================== */
+/* ★対戦画面の中ではなく、画面そのものに置きます。
+   盤面の上に重ねると、確かめたいところがパネルで隠れて、
+   何を直しているのか分からなくなるためです。
+   画面が広ければ、盤面の横の余白に収まります。 */
+.v8-tune {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  z-index: 2147482000;      /* 暗転の幕より奥。幕が出ている間は触れません */
+  font-size: 12px;
+  color: #f1e6d2;
+}
+/* 「⇄」で反対側へ逃がせます（盤面の位置は端末で変わるため） */
+.v8-tune--right { left: auto; right: 8px; }
+
+.v8-tune__bar { display: flex; gap: 4px; }
+.v8-tune--right .v8-tune__bar { justify-content: flex-end; }
+.v8-tune__swap { min-width: 32px; padding: 4px 6px; }
+
+.v8-tune__toggle {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(198, 176, 132, 0.7);
+  background: rgba(8, 10, 18, 0.86);
+  color: #f1e6d2;
+  font-size: 12px;
+}
+.v8-tune__box {
+  display: none;
+  width: min(320px, 86vw);
+  max-height: 70vh;
+  margin-top: 6px;
+  border: 1px solid rgba(198, 176, 132, 0.6);
+  border-radius: 8px;
+  background: rgba(8, 10, 18, 0.94);
+  overflow: hidden;
+}
+.v8-tune-open .v8-tune__box { display: flex; flex-direction: column; }
+
+.v8-tune__head {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(198, 176, 132, 0.35);
+  font-size: 11px;
+  color: #c6b084;
+}
+.v8-tune__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(154, 133, 89, 0.55) transparent;
+}
+.v8-tune__group {
+  margin: 8px 0 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(198, 176, 132, 0.3);
+  color: #c6b084;
+  font-size: 11px;
+}
+.v8-tune__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+.v8-tune__name { flex: 0 0 40%; font-size: 11px; line-height: 1.2; }
+.v8-tune__range { flex: 1 1 auto; min-width: 0; height: 28px; }
+.v8-tune__val { flex: 0 0 52px; text-align: right; font-size: 11px; }
+.v8-tune__note {
+  margin: 0 0 4px;
+  color: #9a8559;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.v8-tune__foot {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(198, 176, 132, 0.35);
+}
+.v8-tune__btn {
+  flex: 1 1 0;
+  min-height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(198, 176, 132, 0.7);
+  background: rgba(20, 26, 44, 0.9);
+  color: #f1e6d2;
+  font-size: 11px;
+}
+.v8-tune__out {
+  display: none;
+  width: 100%;
+  height: 140px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 0;
+  border-top: 1px solid rgba(198, 176, 132, 0.35);
+  background: #05070d;
+  color: #f1e6d2;
+  font-size: 10px;
+  line-height: 1.4;
+}

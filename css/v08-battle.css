@@ -1,0 +1,2331 @@
+/* =====================================================================
+   v08-battle.css ― v0.8 対戦画面（ラフ実測版）
+   ---------------------------------------------------------------------
+   基準：『マヨイビトDCG 対戦画面UI配置仕様書 v0.1』＋『盤面ラフ.png』
+   基準解像度 1080 × 1920（9:16）。座標は配置仕様書 4〜6 の実測値。
+
+   ★拡大縮小のしかた（配置仕様書 2 との違い・意図的）
+     配置仕様書 2 は transform: scale() を勧めていますが、
+     v0.8 では v0.7 ハブと同じ --u 方式を使います。
+       --u = 100cqw / 1080 ＝「1080基準の1px」
+     位置と大きさの計算は scale() と同じ結果になります
+     （縦横同率・中央寄せ・比率が崩れない）。違うのは文字とタップ領域で、
+     scale() だと文字まで縮み、320px端末で本文が7.7pxになって
+     総合仕様書 3.3 の下限（本文14px）を原理的に満たせません。
+     そこで、位置は --u、文字とタップ領域は実寸で下限を守ります。
+
+   ★重なり順は配置仕様書 10 に合わせています。
+   ===================================================================== */
+
+.v8-battle {
+  /* ★器の中の重ね順。v0.7 の個別画面(40)より手前、ローディング(50)より奥。
+     指定しないと、開いたままの個別画面の下に潜って見えなくなります。 */
+  z-index: 45;
+
+  /* ---------- 付録C：実機で調整する値 ---------- */
+  --v8-radius: calc(14 * var(--u));
+
+  /* ★盤面の見え方（斜めからのアングル）
+     カードごとに遠近を持たせると、どのカードも同じ形に潰れてしまい、
+     「まっすぐなカードが並んでいる」ようにしか見えませんでした。
+
+     遠近は盤面ぜんたいで1つだけ持ち、視点も1つにします。
+     こうすると、視点から左のカードは右へ、右のカードは左へ、
+     奥側の辺が寄っていき、盤面全体が視点へ向かう三角形に見えます。
+
+     カードの中心は z=0 のままなので、位置は実測値どおり動きません。 */
+  --v8-card-tilt: 16deg;
+  --v8-persp: calc(1500 * var(--u));
+  --v8-persp-x: 50%;
+  --v8-persp-y: 44%;
+
+  /* ★山札の傾き。自分は右下がり、相手は逆向き。 */
+  --v8-deck-tilt: 3deg;
+
+  /* ---------- 色。v0.7 ハブから引き継ぐ（総合仕様書 3.1） ---------- */
+  --v8-panel: var(--v7-color-panel);
+  --v8-panel-soft: var(--v7-color-panel-soft);
+  --v8-line: var(--v7-color-border-gold);
+  --v8-text: var(--v7-color-text);
+  --v8-muted: var(--v7-color-text-muted);
+  --v8-accent: var(--v7-color-accent);
+
+  position: absolute;
+  inset: 0;
+  background: var(--v7-color-bg);
+  overflow: hidden;
+}
+
+/* 「動きを減らす」（総合仕様書 3.7 / 21.2） */
+.v8-battle.v8-reduce,
+.v8-battle.v8-reduce * { transition-duration: 0ms !important; animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .v8-battle, .v8-battle * { transition-duration: 0ms !important; animation: none !important; }
+}
+
+/* =====================================================================
+   共通
+   ===================================================================== */
+.v8-panel {
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v8-radius);
+  color: var(--v8-text);
+  box-sizing: border-box;
+}
+
+.v8-btn {
+  font-family: inherit;
+  color: var(--v8-text);
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v8-radius);
+  box-sizing: border-box;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease-out;
+}
+.v8-btn:active { transform: scale(0.98); }
+
+/* ★見た目より広いタップ領域（配置仕様書 11・総合仕様書 3.4）
+   1080基準の指定が小さくても、実寸で必ず 44px 以上を確保します。
+   見た目は変えず、当たり判定だけを中心から広げます。 */
+.v8-hit { position: absolute; }
+.v8-hit::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+}
+
+/* 数値が変わったとき短く強調（総合仕様書 4.5） */
+.v8-flash { animation: v8-flash 0.6s ease-out; }
+@keyframes v8-flash {
+  0% { color: var(--v8-accent); text-shadow: 0 0 10px var(--v7-color-accent-soft); }
+  100% { color: inherit; text-shadow: none; }
+}
+
+/* =====================================================================
+   上下のHUD（UI-O-01 / UI-P-07）
+   ===================================================================== */
+.v8-hud {
+  position: absolute;
+  left: 0;
+  width: calc(1080 * var(--u));
+  background: #000;
+  z-index: 5;
+}
+.v8-hud--opp  { top: 0;                      height: calc(180 * var(--u)); }
+.v8-hud--self { top: calc(1739 * var(--u));  height: calc(181 * var(--u)); }
+
+/* セーフエリアぶんは器の外側で処理されるが、念のため内側に確保する */
+.v8-hud--opp  { padding-top: env(safe-area-inset-top, 0px); }
+.v8-hud--self { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* =====================================================================
+   手札パネル（UI-O-02/03・UI-P-05/06）
+   ラフの灰色パネル＋白い枠は、ホーム画面と同系統の濃紺・金枠へ置き換え。
+   ===================================================================== */
+.v8-hand-panel {
+  position: absolute;
+  width: calc(522 * var(--u));
+  height: calc(160 * var(--u));
+  background: var(--v8-panel-soft);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v8-radius);
+  box-sizing: border-box;
+  z-index: 10;
+}
+.v8-hand-panel--opp  { left: calc(8 * var(--u));   top: calc(10 * var(--u)); }
+.v8-hand-panel--self { left: calc(550 * var(--u)); top: calc(1750 * var(--u)); }
+
+/* 裏面を並べる枠 */
+.v8-hand__slots {
+  position: absolute;
+  width: calc(427 * var(--u));
+  height: calc(126 * var(--u));
+  z-index: 10;
+}
+.v8-hand__slots--opp  { left: calc(55 * var(--u));  top: calc(24 * var(--u)); }
+.v8-hand__slots--self { left: calc(598 * var(--u)); top: calc(1764 * var(--u)); }
+
+.v8-hand__back {
+  position: absolute;
+  top: 0;
+  height: calc(126 * var(--u));
+  aspect-ratio: 63 / 88;
+  border-radius: calc(7 * var(--u));
+  border: 1px solid var(--v8-line);
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(118, 80, 200, 0.22) 0 calc(6 * var(--u)),
+      rgba(10, 17, 32, 0.92) calc(6 * var(--u)) calc(12 * var(--u)));
+  box-shadow: calc(-2 * var(--u)) 0 calc(6 * var(--u)) rgba(0, 0, 0, 0.55);
+}
+
+/* =====================================================================
+   山札／トラッシュ（UI-O-04・UI-P-04）
+   ラフでは「山札/トラッシュ」の文字の下に〔トラッシュ〕ボタン。
+   総合仕様書 4.5 に合わせ、上の行を枚数表示（山札 24 ｜ トラッシュ 9）にする。
+   ===================================================================== */
+.v8-counts {
+  position: absolute;
+  width: calc(204 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8 * var(--u));
+  white-space: nowrap;
+  z-index: 10;
+}
+/* ★フィールドカードと手札エリアのちょうど真ん中へ（ダロクの指示）
+   相手：手札の右端530 〜 フィールドの左端834 → 中央682 → 左端 580
+   自分：フィールドの右端247 〜 手札の左端550 → 中央398.5 → 左端 296.5 */
+.v8-counts--opp  { left: calc(580 * var(--u));   top: calc(30 * var(--u)); }
+.v8-counts--self { left: calc(296.5 * var(--u)); top: calc(1770 * var(--u)); }
+/* アイコン＋数字を1組にして並べる */
+.v8-counts__item {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  color: var(--v8-muted);
+}
+.v8-counts__num { font-size: var(--v7-fs-body); color: var(--v8-text); }
+
+/* アイコンは文字の大きさに合わせる。小さくなりすぎないよう下限つき。 */
+.v8-icon {
+  width: max(calc(46 * var(--u)), 16px);
+  height: max(calc(46 * var(--u)), 16px);
+  display: block;
+  flex: 0 0 auto;
+}
+/* ★トラッシュボタンは文字だけ（アイコンなし）。
+   ラフの 204×73 は、320px端末では実寸 60×22px にしかなりません。
+   「トラッシュ」は全角5文字なので、ボタン文字の下限15pxだと入りません。
+   ここだけ 1080基準で縮み、12px を下限として字間も少し詰めます。 */
+.v8-trash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(2 * var(--u));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.v8-trash {
+  width: calc(204 * var(--u));
+  height: calc(73 * var(--u));
+  font-size: max(calc(40 * var(--u)), 12px);
+  letter-spacing: -0.04em;
+  z-index: 10;
+}
+.v8-trash--opp  { left: calc(580 * var(--u));   top: calc(96 * var(--u)); }
+.v8-trash--self { left: calc(296.5 * var(--u)); top: calc(1836 * var(--u)); }
+
+/* =====================================================================
+   フィールドカード（UI-O-05・UI-P-03）
+   ロスト枚数（現在／敗北条件）を重ねる。
+   ===================================================================== */
+.v8-field {
+  position: absolute;
+  border-radius: calc(10 * var(--u));
+  border: 1px solid var(--v8-line);
+  background-color: #0b1222;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  padding: 0;
+  box-sizing: border-box;
+  z-index: 10;
+}
+.v8-field--opp  { left: calc(834 * var(--u)); top: calc(6 * var(--u));    width: calc(240 * var(--u)); height: calc(168 * var(--u)); }
+.v8-field--self { left: calc(5 * var(--u));   top: calc(1745 * var(--u)); width: calc(242 * var(--u)); height: calc(169 * var(--u)); }
+
+/* ★ロスト枚数（現在／敗北条件）
+   絵の上に文字を置くだけだと、絵柄によって読めなくなります。
+   下端に濃い帯を敷き、数字も大きくしました。
+   相手は右下、自分は左下（ラフのとおり）。 */
+.v8-field__lost {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  align-items: baseline;
+  gap: calc(2 * var(--u));
+  padding: calc(2 * var(--u)) calc(10 * var(--u)) calc(4 * var(--u));
+  background: rgba(0, 0, 0, 0.74);
+  color: var(--v8-text);
+  font-size: var(--v7-fs-body);
+  line-height: 1.05;
+  text-shadow: 0 0 calc(6 * var(--u)) #000;
+}
+.v8-field--opp  .v8-field__lost { right: 0; border-top-left-radius:  calc(10 * var(--u)); }
+.v8-field--self .v8-field__lost { left: 0;  border-top-right-radius: calc(10 * var(--u)); }
+.v8-field__lost b { font-size: var(--v7-fs-hero); font-weight: 700; }
+.v8-field__lost span { color: var(--v8-muted); }
+
+/* =====================================================================
+   山札（UI-O-06・UI-P-02）
+   ラフのとおり、左右の画面外へ意図的にはみ出させる。
+   上面と側面がわずかに見える束にする（総合仕様書 4.5）。
+   ===================================================================== */
+.v8-deck {
+  position: absolute;
+  z-index: 10;
+  transform-origin: 50% 50%;
+}
+/* ★盤面のカードと同じ角度で寝かせ、そのうえで軽くひねる。
+   盤面だけ寝ていて山札が立っていると、置かれている面が違って見えます。
+   自分と相手でひねる向きを逆にして、左右の対称性を保ちます。 */
+.v8-deck--self {
+  transform: perspective(var(--v8-persp)) rotateX(var(--v8-card-tilt))
+             rotate(var(--v8-deck-tilt));
+}
+.v8-deck--opp {
+  transform: perspective(var(--v8-persp)) rotateX(var(--v8-card-tilt))
+             rotate(calc(-1 * var(--v8-deck-tilt)));
+}
+/* ★相手の山札は「奥にある」ので、自分側より小さく見せる（およそ78%）。
+   左端から。見えているのは 0〜124
+   上端は 468（実測）→488（20px下げ）→473（15px戻し）の経緯。 */
+.v8-deck--opp  { left: calc(-60 * var(--u));  top: calc(473 * var(--u));  width: calc(184 * var(--u)); height: calc(221 * var(--u)); }
+/* 自分：右端から。見えているのは 921〜1080 */
+.v8-deck--self { left: calc(921 * var(--u));  top: calc(1036 * var(--u)); width: calc(229 * var(--u)); height: calc(284 * var(--u)); }
+
+.v8-deck__sheet {
+  position: absolute;
+  inset: 0;
+  border-radius: calc(14 * var(--u));
+  border: 1px solid var(--v8-line);
+  background: linear-gradient(150deg, #16203a, #0a1120);
+}
+/* ★束の厚み（側面）。下へずらすほど「積まれている」ことが分かる。
+   寝かせた面の上に積み上がるので、ずらす向きは手前＝下方向。
+   いちばん最後の板が表側（模様のある面）。 */
+.v8-deck__sheet:nth-child(1) { transform: translate(calc(8 * var(--u)), calc(28 * var(--u))); opacity: 0.34; }
+.v8-deck__sheet:nth-child(2) { transform: translate(calc(6 * var(--u)), calc(21 * var(--u))); opacity: 0.48; }
+.v8-deck__sheet:nth-child(3) { transform: translate(calc(4 * var(--u)), calc(14 * var(--u))); opacity: 0.64; }
+.v8-deck__sheet:nth-child(4) { transform: translate(calc(2 * var(--u)), calc(7 * var(--u)));  opacity: 0.82; }
+
+/* ★残り枚数の段階（data-level）。深い板から順に消していく。
+   減っていくのが目で分かるようにするためのもの。 */
+.v8-deck[data-level="4"] .v8-deck__sheet:nth-child(1),
+.v8-deck[data-level="3"] .v8-deck__sheet:nth-child(-n+2),
+.v8-deck[data-level="2"] .v8-deck__sheet:nth-child(-n+3),
+.v8-deck[data-level="1"] .v8-deck__sheet:nth-child(-n+4),
+.v8-deck[data-level="0"] .v8-deck__sheet { display: none; }
+
+/* 山札が尽きたら、置き場所だけをうっすら残す */
+.v8-deck[data-level="0"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px dashed rgba(154, 133, 89, 0.35);
+  border-radius: calc(14 * var(--u));
+}
+.v8-deck__sheet:nth-child(5) {
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(118, 80, 200, 0.20) 0 calc(7 * var(--u)),
+      rgba(12, 20, 38, 0.95) calc(7 * var(--u)) calc(14 * var(--u)));
+}
+.v8-deck__num {
+  position: absolute;
+  bottom: calc(12 * var(--u));
+  font-size: var(--v7-fs-body);
+  color: var(--v8-text);
+  text-shadow: 0 0 calc(6 * var(--u)) #000;
+}
+/* はみ出している側と反対の端へ数字を寄せ、画面内に必ず入るようにする */
+.v8-deck--opp  .v8-deck__num { right: calc(14 * var(--u)); }
+.v8-deck--self .v8-deck__num { left:  calc(14 * var(--u)); }
+
+/* =====================================================================
+   固定UI：気力・設定・ログ・メイン終了（UI-O-07 / UI-C-01〜03 / UI-P-01）
+   配置仕様書 10 のとおり、盤面カードより手前（40）。
+   ===================================================================== */
+.v8-vigor {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v8-radius);
+  box-sizing: border-box;
+  z-index: 40;
+}
+.v8-vigor--opp  { left: calc(941 * var(--u)); top: calc(476 * var(--u));  width: calc(139 * var(--u)); height: calc(140 * var(--u)); }
+.v8-vigor--self { left: 0;                    top: calc(1180 * var(--u)); width: calc(140 * var(--u)); height: calc(140 * var(--u)); }
+.v8-vigor__label { font-size: var(--v7-fs-caption); color: var(--v8-muted); line-height: 1.1; }
+.v8-vigor__num   { font-size: var(--v7-fs-hero);    color: var(--v8-text);  line-height: 1.15; }
+
+.v8-iconbtn {
+  width: calc(110 * var(--u));
+  height: calc(110 * var(--u));
+  font-size: var(--v7-fs-button);
+  z-index: 40;
+}
+.v8-iconbtn--settings { left: calc(4 * var(--u)); top: calc(846 * var(--u)); }
+.v8-iconbtn--log      { left: calc(6 * var(--u)); top: calc(983 * var(--u)); }
+
+/* 主操作ボタン。位置と形は固定し、ラベルだけ変える（総合仕様書 4.6） */
+.v8-main {
+  left: calc(930 * var(--u));
+  top: calc(827 * var(--u));
+  width: calc(147 * var(--u));
+  height: calc(147 * var(--u));
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(6 * var(--u));
+  font-size: var(--v7-fs-button);
+  line-height: 1.2;
+  box-shadow: 0 0 calc(14 * var(--u)) var(--v7-color-accent-soft);
+  z-index: 40;
+}
+.v8-main:disabled { opacity: 0.45; cursor: default; }
+.v8-main__progress { font-size: var(--v7-fs-caption); color: var(--v8-muted); }
+
+/* ★対象が選べていて、押せば進める状態のときは光らせる（第7部）。
+   「次はここを押す」が、文字を読まなくても分かるようにするためです。 */
+.v8-main--ready {
+  border-color: var(--v8-accent);
+  animation: v8-main-ready 1.4s ease-in-out infinite;
+}
+@keyframes v8-main-ready {
+  0%, 100% { box-shadow: 0 0 calc(14 * var(--u)) var(--v7-color-accent-soft); }
+  50%      { box-shadow: 0 0 calc(34 * var(--u)) calc(6 * var(--u)) var(--v8-accent); }
+}
+.v8-battle.v8-reduce .v8-main--ready {
+  animation: none;
+  box-shadow: 0 0 calc(24 * var(--u)) calc(4 * var(--u)) var(--v8-accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .v8-main--ready { animation: none; }
+}
+
+/* =====================================================================
+   盤面（配置仕様書 5・6）
+   ---------------------------------------------------------------------
+   カードは JS が実測値から計算した位置へ置きます（v08-board.js）。
+   奥行きは transform ではなく「段ごとの大きさの違い」で表します。
+   ラフがそういう作りなので、傾けると実測値からずれてしまいます。
+   ===================================================================== */
+/* ★遠近は盤面が1つだけ持つ。視点も1つ。 */
+.v8-board {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  perspective: var(--v8-persp);
+  perspective-origin: var(--v8-persp-x) var(--v8-persp-y);
+
+  /* ★これが無いと、盤面の板が画面全体を覆って、
+     下の層（手札パネル・トラッシュ・フィールド＝z-index 10）の
+     タップを全部飲み込みます。板は入力を素通しさせ、
+     カードだけが入力を受け取ります。 */
+  pointer-events: none;
+}
+/* カードは孫要素なので、遠近を素通しさせる */
+.v8-area {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.v8-card {
+  position: absolute;
+  pointer-events: auto;   /* 板は素通し、カードだけが入力を受ける */
+  aspect-ratio: 63 / 88;
+  border-radius: calc(10 * var(--u));
+  border: 1px solid var(--v8-line);
+  background-color: #0b1222;
+  background-size: cover;
+  background-position: center top;
+  overflow: hidden;
+  padding: 0;
+  box-sizing: border-box;
+
+  /* ★盤面が持つ遠近の中で寝かせる。中心は動かないので配置は実測どおり。
+     視点から離れたカードほど、奥側の辺が視点のほうへ寄っていく。 */
+  transform-origin: 50% 50%;
+  transform: rotateX(var(--v8-card-tilt));
+
+  transition: left 0.22s ease-out, top 0.22s ease-out, width 0.22s ease-out,
+              box-shadow 0.18s ease-out;
+}
+
+/* ★数値は左下にひとかたまり（2026-08-01・v0.7 以前と同じ置き方）。
+
+   以前は下いっぱいの帯に「速」と「体」を左右へ振り分けていました。
+   ★手札のように何枚も重なる場面では、右端の体力が隣の札に隠れて
+     読めません。左下にまとめておけば、少し見えていれば両方読めます。
+
+   ★大きさはカード幅に連動します。
+     カードの font-size にカード幅そのものが入っているので（JS が入れます）、
+     em で書けば、小さいカードでも比率が保たれます。 */
+.v8-card__stats {
+  position: absolute;
+  left: 0; bottom: 0;
+  display: flex;
+  align-items: stretch;
+  z-index: 3;
+  /* 0.30（枠の大きさ）× 0.62。v0.7 以前と同じ値です */
+  font-size: 0.186em;
+  line-height: 1;
+}
+.v8-card__cost {
+  position: absolute;
+  top: calc(4 * var(--u));
+  left: calc(4 * var(--u));
+  min-width: calc(34 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid var(--v8-line);
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-text);
+  text-align: center;
+}
+/* 1つぶんの枠。ここから下の em は「この枠の文字サイズ」が基準です。
+
+   ★線と文字を細くしました（2026-08-01）。
+     白い太枠に太字だと、絵の上で札そのものより目立ってしまい、
+     この世界の見た目から浮いていました。
+     線は古びた金へ寄せ、文字も太字をやめています。 */
+.v8-card__stat {
+  min-width: 1.05em;
+  padding: 0.15em 0.18em;
+  border-radius: 0.18em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #f1e6d2;
+  background: rgba(8, 10, 18, 0.82);
+  border: 0.05em solid rgba(198, 176, 132, 0.62);
+  text-shadow: 0 0.04em 0.08em rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+}
+/* 基礎値から上がっている／下がっているときの色分け */
+.v8-card__stat--up   { color: #a6dfae; border-color: rgba(142, 214, 158, 0.72); }
+.v8-card__stat--down { color: #e6a3a8; border-color: rgba(224, 138, 146, 0.72); }
+
+/* 選択枠・追跡線・対象表示は 30（配置仕様書 10）。Stage 3 で使う */
+.v8-card--selected { box-shadow: 0 0 0 calc(3 * var(--u)) var(--v8-accent); z-index: 30; }
+.v8-card--dim      { filter: brightness(0.45); }
+
+/* =====================================================================
+   フェイズ表示（総合仕様書 4.7：常時表示せず開始時だけ短く）
+   ===================================================================== */
+.v8-phase {
+  position: absolute;
+  left: 0; right: 0;
+  top: 44%;
+  text-align: center;
+  font-size: var(--v7-fs-title);
+  letter-spacing: 0.14em;
+  color: var(--v8-text);
+  text-shadow: 0 0 calc(18 * var(--u)) rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 50;
+}
+.v8-phase.v8-on { animation: v8-phase 1.6s ease-out; }
+@keyframes v8-phase {
+  0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; }
+}
+
+/* =====================================================================
+   ★Stage 2-2：手札（仕様書 第5部）
+   ===================================================================== */
+
+/* --- 縮小手札：小さな札。枚数と存在を示すだけで、ここからは出せない（5.1） --- */
+.v8-hand__mini {
+  position: absolute;
+  top: 0;
+  height: calc(126 * var(--u));
+  aspect-ratio: 63 / 88;
+  border-radius: calc(7 * var(--u));
+  border: 1px solid var(--v8-line);
+  background-color: #0b1222;
+  background-size: cover;
+  background-position: center top;
+  box-shadow: calc(-2 * var(--u)) 0 calc(6 * var(--u)) rgba(0, 0, 0, 0.55);
+}
+/* 手札の帯そのものが「拡大へ切り替える」ボタン（5.1） */
+.v8-hand__slots--self { cursor: pointer; }
+
+/* --- 拡大手札（5.2） --- */
+.v8-hand-big {
+  position: absolute;
+  inset: 0;
+  z-index: 46;              /* 盤面カード(20)と固定UI(40)より手前 */
+
+  /* ★display では出し分けません（display はアニメーションできないため）。
+     出し分けは visibility と opacity で行います。
+     ここに display:none を残すと、開くクラスが付いても器が
+     出てこなくなります（実際にやりました）。 */
+  display: block;
+
+  /* ★この器は最後まで素通しです。
+     開いたときに器へ入力を戻すと、器が画面を覆って
+     「拡大したまま盤面カードをタップする」ができなくなります（5.2）。
+     余白タップで閉じるのは、覆わずに入力を見るやり方で実現しています
+     （v08-hand.js の _watchOutside）。 */
+  pointer-events: none;
+
+  /* ★開閉のアニメーション。display は動かせないので、
+     見えるかどうかと位置だけを動かします。 */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12%);
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out,
+              visibility 0s linear 0.22s;
+}
+.v8-hand-open .v8-hand-big {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out,
+              visibility 0s linear 0s;
+}
+
+.v8-hand__card {
+  position: absolute;
+  pointer-events: auto;     /* 器は素通し、カードだけが入力を受ける */
+  touch-action: none;       /* ドラッグとスクロールを競合させない（23.3） */
+  transform-origin: 50% 100%;
+
+  /* ★両どなりを左右へ押しのけます（2026-08-01）。
+     選んだ札はいちばん手前に出るので、押しのけないと
+     となりの札が完全に隠れて、押せなくなります。
+     動かす量は JS が --v8-push に入れます（重なり具合で変わるため）。 */
+  transform: translateX(var(--v8-push, 0px));
+
+  /* 持ち上がりと押しのけを滑らかに。
+     ★transform を並べておかないと、ぱっと飛びます。 */
+  transition: left 0.22s ease-out, top 0.22s ease-out, width 0.22s ease-out,
+              transform 0.18s ease-out, box-shadow 0.16s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .v8-hand__card { transition: none; }
+}
+/* ★選んだ札は持ち上げて、フチを光らせます（5.3）。
+   重なりが深いときでも、この1枚だけは全体が読めるようにするためです。
+   手前へ出すのは JS がやります（並べるときに z をじかに入れているため）。 */
+.v8-hand__card.v8-card--selected {
+  transform: translateY(calc(-56 * var(--u)));
+  box-shadow:
+    0 0 0 calc(4 * var(--u)) var(--v8-accent),
+    0 calc(14 * var(--u)) calc(30 * var(--u)) rgba(0, 0, 0, 0.65),
+    0 0 calc(34 * var(--u)) rgba(150, 110, 240, 0.75);
+}
+
+.v8-hand__card--dragging {
+  transition: none;
+  z-index: 200 !important;
+  box-shadow: 0 calc(10 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, 0.7);
+  /* ★指の下にいるので、置き先を探すときに邪魔をしないよう素通しにする。
+     これが無いと、離した場所には必ずこのカードがいて、
+     置き先が見つからず「何も起きない」ことになります。 */
+  pointer-events: none;
+}
+
+/* ★出せるカードはフチを光らせる（3.5：有効対象は通常より明るく）。
+   出せないカードを暗くするのはやめました。見づらいだけでした。
+
+   ★Stage 6-6：v0.7 以前と同じく、ゆっくり呼吸させます。
+     止まった光だと、フチが太いカードとの区別が付きにくく、
+     「いま押せる」という合図として弱いためです。 */
+.v8-card--playable {
+  box-shadow:
+    0 0 0 calc(3 * var(--u)) var(--v8-accent),
+    0 0 calc(18 * var(--u)) rgba(118, 80, 200, 0.55);
+  animation: v8-breath 2.2s ease-in-out infinite;
+}
+@keyframes v8-breath {
+  0%, 100% {
+    box-shadow: 0 0 0 calc(3 * var(--u)) var(--v8-accent),
+                0 0 calc(14 * var(--u)) rgba(118, 80, 200, 0.40);
+  }
+  50% {
+    box-shadow: 0 0 0 calc(3 * var(--u)) var(--v8-accent),
+                0 0 calc(30 * var(--u)) rgba(150, 110, 240, 0.85);
+  }
+}
+
+/* 選んでいるあいだと、動きを減らす設定のときは、一定の光にする */
+.v8-card--playable.v8-card--selected,
+.v8-battle.v8-reduce .v8-card--playable { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .v8-card--playable { animation: none; }
+}
+
+/* --- 置き先（5.4：有効な場所を明るくする） ---
+   ★カードの種類ごとに枠を分けていましたが、1つにまとめました
+     （2026-08-01）。人間・怪異・イベント・グッズのどれを運んでも
+     同じ場所・同じ大きさの枠が出ます。
+
+     分けていたころは、運ぶカードによって狙う場所が変わるので、
+     そのつど枠を探すことになっていました。分ける利点がありません。 */
+.v8-drop {
+  position: absolute;
+  display: none;
+  z-index: 44;
+  left: calc(20 * var(--u));
+  top: calc(880 * var(--u));
+  width: calc(1040 * var(--u));
+  height: calc(560 * var(--u));
+  border: calc(3 * var(--u)) dashed var(--v8-accent);
+  border-radius: var(--v8-radius);
+  background: var(--v7-color-accent-soft);
+  pointer-events: auto;
+}
+/* ドラッグ中だけ出す。運んでいるカードの種類は問いません */
+.v8-dragging .v8-drop { display: block; }
+
+/* =====================================================================
+   ★Stage 3-1：追跡フェイズ（仕様書 第6部）
+   ===================================================================== */
+
+/* 真上視点。カードを寝かせるのをやめるだけで、配置は動かない（6.1） */
+.v8-battle.v8-tracking { --v8-card-tilt: 0deg; }
+.v8-battle.v8-tracking .v8-card { transition: transform var(--v8-view-ms) ease-out; }
+
+/* 明暗（6.3） */
+.v8-card--dim { filter: brightness(0.42) saturate(0.75); }
+.v8-card--bright { filter: brightness(1.06); }
+.v8-card--strong {
+  filter: brightness(1.12);
+  box-shadow:
+    0 0 0 calc(3 * var(--u)) var(--v8-accent),
+    0 0 calc(20 * var(--u)) rgba(118, 80, 200, 0.6);
+}
+/* 掴める怪異は指で触れる。それ以外は閲覧だけ */
+.v8-tracking .v8-card[data-track-role="youkai"] { touch-action: none; cursor: grab; }
+
+/* 線と矢印（6.6）。ドラッグ中は細い線、仮追跡は矢じり付き */
+.v8-track-arrow {
+  position: absolute;
+  inset: 0;
+  z-index: 30;            /* 配置仕様書 10：選択枠・追跡線は 30 */
+  display: none;
+  pointer-events: none;
+  overflow: visible;
+}
+#v8-track-line {
+  stroke: var(--v8-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  fill: none;
+}
+.v8-track-arrow[data-kind="drag"] #v8-track-line {
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  opacity: 0.85;
+}
+#v8-track-head { fill: var(--v8-accent); display: none; }
+
+/* 案内（6.8） */
+.v8-track-guide {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(838 * var(--u));
+  z-index: 31;
+  display: none;
+  text-align: center;
+  font-size: var(--v7-fs-body);
+  color: var(--v8-muted);
+  text-shadow: 0 0 calc(10 * var(--u)) #000;
+  pointer-events: none;
+}
+.v8-tracking .v8-track-guide { display: block; }
+
+/* 確認パネル（6.9・6.10） */
+.v8-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 62;   /* いちばん手前（20.1） */
+  display: none;
+}
+.v8-confirm.v8-on { display: block; }
+.v8-confirm__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  /* ★背景タップは効きません（6.9）。受け取って何もしないだけです。 */
+  pointer-events: auto;
+}
+.v8-confirm__panel {
+  position: absolute;
+  left: calc(40 * var(--u));
+  right: calc(40 * var(--u));
+  bottom: calc(60 * var(--u));
+  padding: calc(28 * var(--u)) calc(24 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-large);
+  box-sizing: border-box;
+}
+.v8-confirm__msg {
+  margin: 0 0 calc(22 * var(--u));
+  text-align: center;
+  font-size: var(--v7-fs-panel);
+  color: var(--v8-text);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.v8-confirm__row { display: flex; gap: calc(18 * var(--u)); }
+.v8-confirm__btn {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: calc(14 * var(--u)) 0;
+  font-size: var(--v7-fs-button);
+}
+.v8-confirm__btn--ok {
+  background: var(--v8-accent);
+  border-color: var(--v8-accent);
+}
+
+/* =====================================================================
+   ★追跡フェイズへ移るときの演出（6.1）
+   ---------------------------------------------------------------------
+   視点が変わったことがすぐ分かるようにします。
+   ・盤面がいったん少し引いてから戻る（カメラが動いた感じ）
+   ・紫の光が上から下へ一度だけ流れる
+   「動きを減らす」設定では、上のほうの規則で止まります。
+   ===================================================================== */
+.v8-track-enter .v8-board {
+  animation: v8-track-in 0.5s ease-out;
+}
+@keyframes v8-track-in {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(0.945); }
+  100% { transform: scale(1); }
+}
+
+/* 上から下へ流れる光 */
+.v8-track-enter::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: 0;
+  height: calc(360 * var(--u));
+  z-index: 52;
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgba(118, 80, 200, 0) 0%,
+    rgba(118, 80, 200, 0.34) 55%,
+    rgba(118, 80, 200, 0) 100%);
+  animation: v8-track-sweep 0.62s ease-out;
+}
+@keyframes v8-track-sweep {
+  0%   { transform: translateY(calc(-360 * var(--u))); opacity: 0; }
+  25%  { opacity: 1; }
+  100% { transform: translateY(calc(1920 * var(--u))); opacity: 0; }
+}
+
+/* =====================================================================
+   ★Stage 2-3：クイック表示（第8部）
+   ---------------------------------------------------------------------
+   画面左上へ固定。中身の量でパネルの大きさを変えず、長いときは
+   パネルの中だけを縦に転がします。×ボタンは置きません（8.3）。
+   ===================================================================== */
+.v8-quick {
+  position: absolute;
+  left: calc(20 * var(--u));
+  top: calc(200 * var(--u));
+  width: calc(520 * var(--u));
+  height: calc(560 * var(--u));   /* ★中身で変えない（8.1） */
+  z-index: 48;
+  display: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: calc(14 * var(--u)) calc(16 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  /* 背後の盤面へ入力を通さない（8.3） */
+  pointer-events: auto;
+}
+.v8-quick-on .v8-quick { display: flex; }
+
+.v8-quick__name {
+  margin: 0 0 calc(10 * var(--u));
+  font-size: var(--v7-fs-panel);
+  color: var(--v8-text);
+  line-height: 1.3;
+}
+.v8-quick__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;               /* パネルの中だけ転がす（8.1） */
+  overscroll-behavior: contain;   /* 外側へ引っ張りを伝えない（23.5） */
+  -webkit-overflow-scrolling: touch;
+
+  /* ★転がす棒が文字にかぶらないよう、右に場所を空けておきます。
+     stable にしておくと、棒が出ていないときも幅が変わりません。
+     幅が変わると、出た瞬間に文字が折り返し直されます。 */
+  scrollbar-gutter: stable;
+  padding-right: calc(10 * var(--u));
+
+  /* ★細く、色は枠と同じ古びた金にそろえます。
+     既定の棒は太くて青く、この世界の見た目から浮いていました。 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(154, 133, 89, 0.55) transparent;
+}
+.v8-quick__body::-webkit-scrollbar { width: calc(8 * var(--u)); }
+.v8-quick__body::-webkit-scrollbar-track { background: transparent; }
+.v8-quick__body::-webkit-scrollbar-thumb {
+  background: rgba(154, 133, 89, 0.55);
+  border-radius: 999px;
+}
+.v8-quick__body::-webkit-scrollbar-thumb:active {
+  background: rgba(154, 133, 89, 0.85);
+}
+
+/* ★転がす棒の見た目をそろえます（2026-08-01）。
+   既定の棒は太くて青く、この世界の見た目から浮いていました。
+   細くして、色は枠と同じ古びた金に。文字にかぶらないよう
+   右に場所を空けておきます（stable なので幅は変わりません）。 */
+.v8-detail__body,
+.v8-log__body {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(154, 133, 89, 0.55) transparent;
+}
+.v8-detail__body::-webkit-scrollbar,
+.v8-log__body::-webkit-scrollbar { width: calc(8 * var(--u)); }
+.v8-detail__body::-webkit-scrollbar-track,
+.v8-log__body::-webkit-scrollbar-track { background: transparent; }
+.v8-detail__body::-webkit-scrollbar-thumb,
+.v8-log__body::-webkit-scrollbar-thumb {
+  background: rgba(154, 133, 89, 0.55);
+  border-radius: 999px;
+}
+
+.v8-quick__row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(10 * var(--u));
+  padding: calc(4 * var(--u)) 0;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  border-bottom: 1px solid rgba(154, 133, 89, 0.18);
+}
+.v8-quick__value { color: var(--v8-text); }
+
+/* ---------------------------------------------------------------------
+   ★効果の条件の達成度（2026-08-01）
+   「トラッシュの〔村〕　3 / 5枚」のように、いまいくつ揃っているかを
+   効果の文章より先に出します。出すかどうかを決めるのに要る情報なので、
+   ★ひと目で「届いているか」が分かるよう、色でも示します。
+   --------------------------------------------------------------------- */
+.v8-cond .v8-quick__label { color: var(--v8-text); }
+.v8-cond .v8-quick__value,
+.v8-cond .v8-detail__val {
+  color: #e0b6b6;              /* まだ届いていない */
+  font-weight: 700;
+}
+.v8-cond--ok .v8-quick__value,
+.v8-cond--ok .v8-detail__val {
+  color: #9fe3a6;              /* 届いている */
+}
+.v8-cond {
+  border-bottom-color: rgba(154, 133, 89, 0.45);
+}
+.v8-quick__text {
+  margin: calc(12 * var(--u)) 0 0;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* =====================================================================
+   ★Stage 2-3：固定式カード詳細（第9部）
+   ---------------------------------------------------------------------
+   全画面。画像も一緒に縦へ転がします。拡大機能は作りません（9.1）。
+   ===================================================================== */
+/* ★重なり順は第20部 20.1 の優先順にそろえます。
+     確認パネル(62) ＞ 固定式カード詳細(58) ＞ ログ(56) ＞ トラッシュ・ロスト(54)
+   以前は詳細が 52 で、ログ(56)の後ろに隠れていました。 */
+.v8-detail {
+  position: absolute;
+  inset: 0;
+  z-index: 58;
+  display: none;
+  flex-direction: column;
+  background: var(--v7-color-bg);
+}
+.v8-detail-on .v8-detail { display: flex; }
+
+.v8-detail__bar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: calc(12 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border-bottom: 1px solid var(--v8-line);
+}
+.v8-detail__nav {
+  min-height: 44px;
+  padding: calc(8 * var(--u)) calc(20 * var(--u));
+  font-size: var(--v7-fs-button);
+}
+
+.v8-detail__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(18 * var(--u)) calc(20 * var(--u)) calc(40 * var(--u));
+}
+.v8-detail__img {
+  width: calc(420 * var(--u));
+  max-width: 100%;
+  margin: 0 auto calc(14 * var(--u));
+  aspect-ratio: 63 / 88;
+  border: 1px solid var(--v8-line);
+  border-radius: calc(12 * var(--u));
+  background-color: #0b1222;
+  background-size: cover;
+  background-position: center top;
+}
+.v8-detail__name {
+  margin: 0 0 calc(16 * var(--u));
+  text-align: center;
+  font-size: var(--v7-fs-title);
+  color: var(--v8-text);
+}
+.v8-detail__sec { margin-bottom: calc(20 * var(--u)); }
+.v8-detail__sectitle {
+  margin: 0 0 calc(8 * var(--u));
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  letter-spacing: 0.1em;
+}
+.v8-detail__row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(12 * var(--u));
+  padding: calc(6 * var(--u)) 0;
+  font-size: var(--v7-fs-body);
+  color: var(--v8-muted);
+  border-bottom: 1px solid rgba(154, 133, 89, 0.18);
+}
+.v8-detail__val { color: var(--v8-text); }
+.v8-detail__row--up .v8-detail__val { color: #8fd6a0; }
+.v8-detail__row--down .v8-detail__val { color: #e08a92; }
+.v8-detail__row--link {
+  cursor: pointer;
+  min-height: 44px;
+  align-items: center;
+}
+.v8-detail__row--link .v8-detail__val {
+  color: var(--v8-accent);
+  text-decoration: underline;
+}
+.v8-detail__text {
+  margin: 0;
+  font-size: var(--v7-fs-body);
+  color: var(--v8-text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* =====================================================================
+   ★Stage 3-2：効果の対象選択（第7部）
+   ===================================================================== */
+
+/* 案内（7.1） */
+.v8-pick-hint {
+  position: absolute;
+  left: calc(20 * var(--u));
+  right: calc(20 * var(--u));
+  top: calc(190 * var(--u));
+  z-index: 42;
+  display: none;
+  padding: calc(10 * var(--u)) calc(14 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  font-size: var(--v7-fs-body);
+  color: var(--v8-text);
+  text-align: center;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+/* 選んだカード（7.4） */
+.v8-card--picked {
+  box-shadow:
+    0 0 0 calc(3 * var(--u)) var(--v8-accent),
+    0 0 calc(20 * var(--u)) rgba(118, 80, 200, 0.6);
+}
+
+/* 選んだ順の番号。色だけに頼らない（23.6） */
+.v8-card__no {
+  position: absolute;
+  top: calc(4 * var(--u));
+  right: calc(4 * var(--u));
+  min-width: calc(40 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  border-radius: 999px;
+  background: var(--v8-accent);
+  border: 1px solid var(--v8-line);
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-text);
+  text-align: center;
+  line-height: 1.1;
+}
+
+/* =====================================================================
+   ★Stage 4-1：公開領域の画面（第11・12・13部）
+   ---------------------------------------------------------------------
+   トラッシュ … 枠のある大型パネル。横4列・縦スクロール
+   ロスト／山札からN枚 … 枠を作らず、黒の中へカードを浮かび上がらせる
+   ===================================================================== */
+.v8-zone-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 54;
+  display: none;
+}
+.v8-zone-on .v8-zone-wrap { display: block; }
+
+/* 枠外は黒く暗転。ここをタップすると閉じる（11.1） */
+.v8-zone__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+}
+.v8-zone-on[data-zone="lost"] .v8-zone__scrim,
+.v8-zone-on[data-zone="pick"] .v8-zone__scrim {
+  background: rgba(0, 0, 0, 0.90);   /* 演出型はより黒く（12.1） */
+}
+
+.v8-zone {
+  position: absolute;
+  left: calc(30 * var(--u));
+  right: calc(30 * var(--u));
+  top: calc(150 * var(--u));
+  bottom: calc(150 * var(--u));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: calc(16 * var(--u));
+}
+/* トラッシュだけ枠を持つ */
+.v8-zone-on[data-zone="trash"] .v8-zone {
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-large);
+}
+
+.v8-zone__title {
+  flex: 0 0 auto;
+  margin: 0 0 calc(12 * var(--u));
+  text-align: center;
+  font-size: var(--v7-fs-panel);
+  color: var(--v8-text);
+}
+
+.v8-zone__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: calc(12 * var(--u));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+}
+/* トラッシュは横4列（11.3） */
+.v8-zone-on[data-zone="trash"] .v8-zone__list {
+  grid-template-columns: repeat(4, 1fr);
+}
+/* 演出型は中央寄せの横並び。入りきらないときだけ折り返す（12.2・13.2） */
+.v8-zone-on[data-zone="lost"] .v8-zone__list,
+.v8-zone-on[data-zone="pick"] .v8-zone__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(24 * var(--u));
+  align-content: center;
+  justify-content: center;
+  overflow-y: auto;
+
+  /* ★カードのぶんだけの高さにします（2026-08-01）。
+     いっぱいに広げたまま中で真ん中に寄せていたので、
+     見出しが画面の上端に取り残され、カードから遠く離れていました。 */
+  flex: 0 1 auto;
+}
+/* 見出しとカードのかたまりごと、画面の真ん中に置きます。
+   ★これで見出しがカードのすぐ上に来ます。 */
+.v8-zone-on[data-zone="lost"] .v8-zone,
+.v8-zone-on[data-zone="pick"] .v8-zone {
+  justify-content: center;
+}
+
+.v8-zone__card {
+  width: 100%;
+  aspect-ratio: 63 / 88;
+  padding: 0;
+  border: 1px solid var(--v8-line);
+  border-radius: calc(8 * var(--u));
+  background-color: #0b1222;
+  background-size: cover;
+  background-position: center top;
+  cursor: pointer;
+  touch-action: none;
+}
+/* 演出型はカードを大きめに、間隔を広く（12.2） */
+.v8-zone-on[data-zone="lost"] .v8-zone__card,
+.v8-zone-on[data-zone="pick"] .v8-zone__card {
+  width: calc(230 * var(--u));
+  box-shadow: 0 0 calc(30 * var(--u)) rgba(118, 80, 200, 0.35);
+}
+
+.v8-zone__foot {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: calc(16 * var(--u));
+  padding-top: calc(12 * var(--u));
+}
+.v8-zone__progress { font-size: var(--v7-fs-body); color: var(--v8-muted); }
+.v8-zone__confirm {
+  min-height: 44px;
+  padding: calc(12 * var(--u)) calc(30 * var(--u));
+  font-size: var(--v7-fs-button);
+  background: var(--v8-accent);
+  border-color: var(--v8-accent);
+}
+
+/* 選択中のカード（第7部の見せ方をそろえる） */
+.v8-zone__card.v8-card--picked {
+  box-shadow: 0 0 0 calc(3 * var(--u)) var(--v8-accent);
+}
+.v8-zone__card.v8-card--dim { filter: brightness(0.42) saturate(0.75); }
+.v8-zone__card.v8-card--bright { filter: brightness(1.06); }
+
+/* =====================================================================
+   ★Stage 4-2：効果処理パネル（第10部）
+   ---------------------------------------------------------------------
+   画面右上へ固定。左上のクイック表示と同時に出せます（10.4）。
+   ===================================================================== */
+.v8-effects {
+  position: absolute;
+  right: calc(20 * var(--u));
+  top: calc(200 * var(--u));
+  width: calc(460 * var(--u));
+  max-height: calc(560 * var(--u));
+  z-index: 47;                /* クイック表示(48)と同じ帯。左右で並ぶ */
+  display: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: calc(12 * var(--u)) calc(14 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  overflow: hidden;
+  /* 見るだけのパネル。背後の操作を邪魔しません */
+  pointer-events: none;
+}
+.v8-effects-on .v8-effects { display: flex; }
+
+.v8-effects__current { flex: 0 0 auto; }
+.v8-effects__name {
+  margin: 0 0 calc(6 * var(--u));
+  font-size: var(--v7-fs-body);
+  color: var(--v8-text);
+  line-height: 1.3;
+}
+.v8-effects__text {
+  margin: 0;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* ★解決するものが入れ替わるとき、上へ流れて次が上がってくる（10.4） */
+.v8-effects--rise { animation: v8-effects-rise 0.34s ease-out; }
+@keyframes v8-effects-rise {
+  0%   { opacity: 0; transform: translateY(calc(26 * var(--u))); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* 待機している効果。カード名だけ・番号なし・開けない（10.4） */
+.v8-effects__queue {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: calc(10 * var(--u));
+  padding-top: calc(8 * var(--u));
+  border-top: 1px solid rgba(154, 133, 89, 0.24);
+  overflow: hidden;
+}
+.v8-effects__wait {
+  padding: calc(4 * var(--u)) 0;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  opacity: 0.82;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 発生源のカードを強調する（10.3） */
+.v8-card--acting {
+  box-shadow:
+    0 0 0 calc(3 * var(--u)) #d8c78a,
+    0 0 calc(24 * var(--u)) rgba(216, 199, 138, 0.5);
+  z-index: 30;
+}
+
+/* 襲撃のときの大きな文字は赤系（既存の見せ方に合わせる） */
+.v8-phase--attack { color: #ff6b78; text-shadow: 0 0 calc(20 * var(--u)) rgba(255, 47, 63, 0.6); }
+
+/* =====================================================================
+   ★Stage 4-3：対戦ログ（第14部）
+   トラッシュと同じ大型パネル形式。枠外は黒く暗転し、端から盤面が見える。
+   ===================================================================== */
+.v8-log-wrap { position: absolute; inset: 0; z-index: 56; display: none; }
+.v8-log-on .v8-log-wrap { display: block; }
+.v8-log__scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.78); }
+
+.v8-log {
+  position: absolute;
+  left: calc(30 * var(--u));
+  right: calc(30 * var(--u));
+  top: calc(150 * var(--u));
+  bottom: calc(150 * var(--u));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: calc(16 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-large);
+}
+.v8-log__title {
+  flex: 0 0 auto;
+  margin: 0 0 calc(10 * var(--u));
+  text-align: center;
+  font-size: var(--v7-fs-panel);
+  color: var(--v8-text);
+}
+/* パネル内だけ縦スクロール（14.1） */
+.v8-log__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* ターンの見出し（14.3） */
+.v8-log__turn {
+  margin: calc(14 * var(--u)) 0 calc(6 * var(--u));
+  padding-bottom: calc(4 * var(--u));
+  border-bottom: 1px solid rgba(154, 133, 89, 0.3);
+  font-size: var(--v7-fs-body);
+  color: var(--v8-accent);
+}
+.v8-log__turn:first-child { margin-top: 0; }
+.v8-log__line {
+  margin: 0;
+  padding: calc(4 * var(--u)) 0;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-text);
+  line-height: 1.55;
+}
+/* カード名は押せる（14.5） */
+.v8-log__card {
+  color: var(--v8-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* 新しいログの知らせ（14.2） */
+.v8-log__more {
+  flex: 0 0 auto;
+  display: none;
+  margin-top: calc(8 * var(--u));
+  min-height: 44px;
+  padding: calc(8 * var(--u));
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  background: var(--v8-accent);
+  color: var(--v8-text);
+  font-family: inherit;
+  font-size: var(--v7-fs-caption);
+  cursor: pointer;
+}
+
+/* ログに添える枚数の変化 */
+.v8-log__delta {
+  margin-left: calc(6 * var(--u));
+  color: var(--v8-muted);
+  font-size: var(--v7-fs-caption);
+}
+
+/* =====================================================================
+   ★Stage 5-1：両者同時マリガン（第15部）
+   手札以外の盤面とUIを暗くし、手札と確定ボタンだけ操作できるようにします。
+   ===================================================================== */
+.v8-mull { position: absolute; inset: 0; z-index: 57; display: none; }
+.v8-mull-on .v8-mull { display: block; }
+
+/* 背景の盤面は暗くし、タップも通しません（15.2） */
+.v8-mull__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.80);
+  pointer-events: auto;
+}
+
+.v8-mull__say {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(1240 * var(--u));
+  margin: 0;
+  text-align: center;
+  font-size: var(--v7-fs-body);
+  color: var(--v8-text);
+  pointer-events: none;
+}
+
+/* 手札は通常の拡大手札と同じ見せ方（15.2） */
+.v8-mull__hand { position: absolute; inset: 0; pointer-events: none; }
+.v8-mull__card { position: absolute; pointer-events: auto; touch-action: none; }
+/* 選んでいるカードは枠で示す。番号は付けない（15.1） */
+.v8-mull__card.v8-card--picked {
+  transform: translateY(calc(-26 * var(--u)));
+  box-shadow: 0 0 0 calc(3 * var(--u)) var(--v8-accent);
+}
+
+.v8-mull__confirm {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(1330 * var(--u));
+  min-width: calc(420 * var(--u));
+  min-height: 44px;
+  padding: calc(14 * var(--u)) calc(24 * var(--u));
+  font-size: var(--v7-fs-button);
+  background: var(--v8-accent);
+  border-color: var(--v8-accent);
+}
+.v8-mull__confirm:active { transform: translateX(-50%) scale(0.98); }
+
+/* =====================================================================
+   ★Stage 5-2：対戦準備画面（第16部）
+   1画面に条件をまとめます。色と枠はホーム画面と同じです。
+   ===================================================================== */
+.v8-prep {
+  position: absolute;
+  inset: 0;
+  z-index: 59;
+  display: none;
+  flex-direction: column;
+  background: var(--v7-color-bg);
+}
+.v8-prep-on .v8-prep { display: flex; }
+
+.v8-prep__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border-bottom: 1px solid var(--v8-line);
+}
+.v8-prep__back { min-height: 44px; padding: calc(8 * var(--u)) calc(20 * var(--u)); font-size: var(--v7-fs-button); }
+.v8-prep__head { font-size: var(--v7-fs-panel); color: var(--v8-text); }
+
+.v8-prep__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(16 * var(--u)) calc(20 * var(--u)) calc(30 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+}
+
+/* デッキパネル。フィールドの絵を敷き、文字の後ろを暗くする（16.1） */
+.v8-prep__deck {
+  position: relative;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  background-color: #0b1222;
+  overflow: hidden;
+  cursor: pointer;
+}
+.v8-prep__deckveil {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  padding: calc(14 * var(--u)) calc(16 * var(--u));
+  background: linear-gradient(to top, rgba(4, 7, 14, 0.94), rgba(4, 7, 14, 0));
+  text-align: left;
+}
+.v8-prep__deckname { font-size: var(--v7-fs-panel); color: var(--v8-text); }
+.v8-prep__deckdesc {
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.v8-prep__change {
+  position: absolute;
+  right: calc(10 * var(--u));
+  top: calc(10 * var(--u));
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(14 * var(--u));
+  border: 1px solid var(--v8-line);
+  border-radius: 999px;
+  background: rgba(10, 17, 32, 0.9);
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-text);
+}
+
+/* 現在値だけを出す行（16.2） */
+.v8-prep__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  font-size: var(--v7-fs-button);
+}
+.v8-prep__now { color: var(--v8-muted); }
+
+.v8-prep__vs {
+  text-align: center;
+  font-size: var(--v7-fs-title);
+  color: var(--v8-line);
+  letter-spacing: 0.2em;
+}
+
+.v8-prep__error {
+  margin: 0;
+  text-align: center;
+  font-size: var(--v7-fs-caption);
+  color: #e08a92;
+  display: none;
+}
+.v8-prep__start {
+  min-height: 44px;
+  padding: calc(16 * var(--u));
+  font-size: var(--v7-fs-button);
+  background: var(--v8-accent);
+  border-color: var(--v8-accent);
+}
+.v8-prep__start:disabled { opacity: 0.45; cursor: default; }
+
+/* 小さな選択画面（16.2） */
+.v8-prep__pick { position: absolute; inset: 0; display: none; }
+.v8-prep-pick-on .v8-prep__pick { display: block; }
+.v8-prep__pickscrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.72); }
+.v8-prep__pickbox {
+  position: absolute;
+  left: calc(60 * var(--u));
+  right: calc(60 * var(--u));
+  bottom: calc(80 * var(--u));
+  padding: calc(20 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-large);
+}
+.v8-prep__picktitle {
+  margin: 0 0 calc(14 * var(--u));
+  text-align: center;
+  font-size: var(--v7-fs-panel);
+  color: var(--v8-text);
+}
+.v8-prep__picklist { display: flex; flex-direction: column; gap: calc(10 * var(--u)); }
+.v8-prep__opt {
+  min-height: 44px;
+  padding: calc(12 * var(--u));
+  font-size: var(--v7-fs-button);
+}
+.v8-prep__opt--on { background: var(--v8-accent); border-color: var(--v8-accent); }
+
+/* 誰のデッキか（ダロクの指示） */
+.v8-prep__who {
+  position: absolute;
+  left: calc(10 * var(--u));
+  top: calc(10 * var(--u));
+  padding: calc(4 * var(--u)) calc(14 * var(--u));
+  border: 1px solid var(--v8-line);
+  border-radius: 999px;
+  background: rgba(10, 17, 32, 0.92);
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+}
+.v8-prep__who--me { color: var(--v8-text); border-color: var(--v8-accent); }
+
+/* =====================================================================
+   ★デッキ選択（第17部 17.1・17.2）
+   ===================================================================== */
+.v8-deckpick {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: none;
+  flex-direction: column;
+  background: var(--v7-color-bg);
+}
+.v8-deckpick-on .v8-deckpick { display: flex; }
+
+.v8-deckpick__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border-bottom: 1px solid var(--v8-line);
+}
+.v8-deckpick__note {
+  flex: 0 0 auto;
+  margin: calc(10 * var(--u)) calc(20 * var(--u)) 0;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+}
+.v8-deckpick__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(12 * var(--u)) calc(20 * var(--u)) calc(20 * var(--u));
+}
+.v8-deck__head {
+  margin: calc(14 * var(--u)) 0 calc(8 * var(--u));
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  letter-spacing: 0.1em;
+}
+/* 2列（17.1） */
+.v8-deck__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: calc(12 * var(--u));
+}
+.v8-deck__item {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  background-color: #0b1222;
+  overflow: hidden;
+  cursor: pointer;
+}
+/* 仮選択（17.2） */
+.v8-deck__item--on {
+  border-color: var(--v8-accent);
+  box-shadow: 0 0 0 calc(3 * var(--u)) var(--v8-accent);
+}
+.v8-deck__veil {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  padding: calc(10 * var(--u)) calc(12 * var(--u));
+  background: linear-gradient(to top, rgba(4, 7, 14, 0.94), rgba(4, 7, 14, 0));
+  text-align: left;
+}
+.v8-deck__name { font-size: var(--v7-fs-body); color: var(--v8-text); }
+.v8-deck__desc {
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.v8-deckpick__ok {
+  flex: 0 0 auto;
+  margin: 0 calc(20 * var(--u)) calc(20 * var(--u));
+  min-height: 44px;
+  padding: calc(14 * var(--u));
+  font-size: var(--v7-fs-button);
+  background: var(--v8-accent);
+  border-color: var(--v8-accent);
+}
+
+
+/* =====================================================================
+   ★デッキのサムネイル（ダロクの指示）
+   ---------------------------------------------------------------------
+   フィールドカードの「イラスト部分だけ」を切り出して、いっぱいに出します。
+
+   画像を実際に測ったところ、両方のフィールドで同じ位置でした。
+     ・イラストの上端 … 画像の高さの 3.1%
+     ・イラストの高さ … 画像の高さの 63.5%
+     ・イラストの幅   … 画像の幅の 93.4%（左右に均等の余白）
+
+   ここから、
+     背景の大きさ … 横 100/0.934 = 107.1%　縦 100/0.635 = 157.5%
+     背景の位置   … 縦 3.1 / (100-63.5) = 8.5%
+     枠の縦横比   … (0.934×640) : (0.635×458) ＝ 約 2.056 : 1
+   としています。この組み合わせなら絵が伸び縮みしません。
+
+   ★カードの絵柄を差し替えてイラストの位置が変わったら、
+     この4つの数字を直せば追従できます。
+   ===================================================================== */
+.v8-deckthumb {
+  aspect-ratio: 2.056 / 1;
+  background-size: 107.1% 157.5%;
+  background-position: 50% 8.5%;
+  background-repeat: no-repeat;
+}
+
+/* =====================================================================
+   ★デッキの詳細（第17部 17.3）
+   ===================================================================== */
+.v8-deck__info {
+  position: absolute;
+  right: calc(8 * var(--u));
+  top: calc(8 * var(--u));
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(12 * var(--u));
+  border: 1px solid var(--v8-line);
+  border-radius: 999px;
+  background: rgba(10, 17, 32, 0.9);
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-text);
+}
+
+.v8-deckview {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: none;
+  flex-direction: column;
+  background: var(--v7-color-bg);
+}
+.v8-deckview-on .v8-deckview { display: flex; }
+
+.v8-deckview__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(14 * var(--u)) calc(20 * var(--u)) calc(20 * var(--u));
+}
+.v8-deckview__art {
+  width: 100%;
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  background-color: #0b1222;
+  margin-bottom: calc(12 * var(--u));
+}
+.v8-deckview__field { margin: 0 0 calc(4 * var(--u)); font-size: var(--v7-fs-body); color: var(--v8-text); }
+.v8-deckview__effect {
+  margin: 0 0 calc(10 * var(--u));
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.v8-deckview__tactics { margin: 0; font-size: var(--v7-fs-caption); color: var(--v8-muted); line-height: 1.5; }
+
+.v8-deckview__list { display: flex; flex-direction: column; gap: calc(6 * var(--u)); }
+.v8-deckview__card {
+  display: flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  min-height: 44px;
+  padding: calc(6 * var(--u)) calc(10 * var(--u));
+  border: 1px solid rgba(154, 133, 89, 0.28);
+  border-radius: var(--v7-radius-small);
+  background: var(--v8-panel-soft);
+  cursor: pointer;
+  text-align: left;
+}
+.v8-deckview__thumb {
+  flex: 0 0 auto;
+  width: calc(56 * var(--u));
+  aspect-ratio: 63 / 88;
+  border-radius: calc(4 * var(--u));
+  background-color: #0b1222;
+  background-size: cover;
+  background-position: center top;
+}
+.v8-deckview__cname { flex: 1 1 auto; font-size: var(--v7-fs-caption); color: var(--v8-text); }
+.v8-deckview__count { flex: 0 0 auto; font-size: var(--v7-fs-body); color: var(--v8-muted); }
+
+.v8-deckview__edit {
+  flex: 0 0 auto;
+  display: none;
+  margin: 0 calc(20 * var(--u)) calc(20 * var(--u));
+  min-height: 44px;
+  padding: calc(14 * var(--u));
+  font-size: var(--v7-fs-button);
+}
+
+/* デッキ一覧の「編集」（自分側の自作デッキだけ・17.4） */
+.v8-deck__edit {
+  position: absolute;
+  left: calc(8 * var(--u));
+  top: calc(8 * var(--u));
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(12 * var(--u));
+  border: 1px solid var(--v8-accent);
+  border-radius: 999px;
+  background: rgba(10, 17, 32, 0.9);
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-text);
+}
+
+/* =====================================================================
+   ★Stage 6-1：リザルト画面（第18部）
+   ---------------------------------------------------------------------
+   背景は、使ったデッキの0コスト人間（ホーム画面の一枚絵と同じ絵）。
+   文字が読めるように暗い覆いを重ねます。
+   ===================================================================== */
+.v8-result {
+  position: absolute;
+  inset: 0;
+  z-index: 53;          /* 対戦ログ(56)より奥。ログを閉じるとここへ戻る */
+  display: none;
+  background: #000;
+}
+.v8-result-on .v8-result { display: block; }
+
+.v8-result__art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center top;
+}
+/* ★一枚絵は暗くしません（ダロクの指定）。
+   文字を置く下のほうだけ、読めるように濃くします。 */
+.v8-result__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom,
+    rgba(4, 7, 14, 0) 0%,
+    rgba(4, 7, 14, 0) 46%,
+    rgba(4, 7, 14, 0.62) 66%,
+    rgba(4, 7, 14, 0.95) 82%,
+    rgba(4, 7, 14, 0.99) 100%);
+}
+
+.v8-result__main {
+  position: absolute;
+  left: calc(40 * var(--u));
+  right: calc(40 * var(--u));
+  bottom: calc(60 * var(--u));
+}
+.v8-result__title {
+  margin: 0 0 calc(8 * var(--u));
+  text-align: center;
+  font-size: var(--v7-fs-hero);
+  letter-spacing: 0.16em;
+  color: var(--v8-text);
+  text-shadow: 0 0 calc(24 * var(--u)) #000;
+}
+.v8-result__reason {
+  margin: 0 0 calc(20 * var(--u));
+  text-align: center;
+  font-size: var(--v7-fs-body);
+  color: var(--v8-text);
+  text-shadow: 0 0 calc(10 * var(--u)) #000;
+}
+.v8-result__info {
+  padding: calc(14 * var(--u)) calc(18 * var(--u));
+  margin-bottom: calc(18 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+}
+.v8-result__row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(12 * var(--u));
+  padding: calc(5 * var(--u)) 0;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+}
+.v8-result__val { color: var(--v8-text); }
+
+.v8-result__btns { display: flex; gap: calc(12 * var(--u)); }
+.v8-result__btn {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: calc(14 * var(--u)) 0;
+  font-size: var(--v7-fs-button);
+}
+.v8-result__btn--go { background: var(--v8-accent); border-color: var(--v8-accent); }
+
+
+/* =====================================================================
+   ★リザルトの飾りと、現れかた（ダロクの指定）
+   ===================================================================== */
+
+/* --- 勝利：大きく、薄い金の虹彩 --- */
+.v8-result--win .v8-result__title {
+  font-size: calc(var(--v7-fs-hero) * 2);
+  letter-spacing: 0.1em;
+  /* ★帯は文字ちょうどに収めます。広げて流すと、端が見えてしまいます。 */
+  background-image: linear-gradient(100deg,
+    #e8cf8a 0%, #fffaf0 22%, #f2dfa6 42%, #fff8e6 58%,
+    #dcc07a 78%, #fff6dd 100%);
+  background-size: 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 calc(14 * var(--u)) rgba(246, 231, 180, 0.55))
+          drop-shadow(0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.9));
+  text-shadow: none;
+}
+
+/* --- 敗北：対になるよう、冷たく沈んだ色で --- */
+.v8-result--lose .v8-result__title {
+  font-size: calc(var(--v7-fs-hero) * 1.7);
+  letter-spacing: 0.22em;
+  background-image: linear-gradient(100deg,
+    #55474f 0%, #a9959e 22%, #6d5b64 44%, #bda9b2 62%, #5c4b54 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 calc(5 * var(--u)) calc(12 * var(--u)) rgba(0, 0, 0, 0.95));
+  text-shadow: none;
+}
+
+/* --- 現れかた（決着 →（少し待つ）→ 黒へクロスフェード → 一枚絵 → 文字 → 情報 → ボタン）---
+   ★黒はいきなり出さず、対戦画面からゆっくり重なって出ます。
+     いきなり切り替わると、決着の余韻が途切れます。 */
+.v8-result-on .v8-result { opacity: 0; animation: v8r-fade 0.8s ease-out forwards; }
+
+.v8-result-on .v8-result__art { opacity: 0; animation: v8r-fade 0.9s ease-out 1.5s forwards; }
+.v8-result-on .v8-result__veil { opacity: 0; animation: v8r-fade 0.9s ease-out 1.5s forwards; }
+.v8-result-on .v8-result__title {
+  opacity: 0;
+  animation: v8r-rise 0.7s ease-out 2.3s forwards;
+}
+/* ★勝利だけ、現れたあとに金がゆっくり淡く明滅します。
+   以前は帯を流していましたが、動きがうるさく、端も見えていました。
+   いまは光の強さだけを、ごくわずかに上下させています。 */
+.v8-result--win .v8-result__title {
+  animation: v8r-rise 0.7s ease-out 2.3s forwards,
+             v8r-glow 7s ease-in-out 3.0s infinite;
+}
+.v8-result-on .v8-result__reason { opacity: 0; animation: v8r-fade 0.6s ease-out 2.8s forwards; }
+.v8-result-on .v8-result__info   { opacity: 0; animation: v8r-rise 0.6s ease-out 3.1s forwards; }
+.v8-result-on .v8-result__btns   { opacity: 0; animation: v8r-rise 0.6s ease-out 3.4s forwards; }
+
+@keyframes v8r-fade { to { opacity: 1; } }
+@keyframes v8r-rise {
+  from { opacity: 0; transform: translateY(calc(22 * var(--u))); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes v8r-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 calc(10 * var(--u)) rgba(246, 231, 180, 0.34))
+            drop-shadow(0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.9));
+  }
+  50% {
+    filter: drop-shadow(0 0 calc(20 * var(--u)) rgba(246, 231, 180, 0.58))
+            drop-shadow(0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.9));
+  }
+}
+
+/* ★「動きを減らす」設定では、待たずに全部見えるようにします。
+   ここで opacity を戻さないと、動きを止めたぶん透明のままになります。 */
+@media (prefers-reduced-motion: reduce) {
+  .v8-result-on .v8-result,
+  .v8-result-on .v8-result__art,
+  .v8-result-on .v8-result__veil,
+  .v8-result-on .v8-result__title,
+  .v8-result-on .v8-result__reason,
+  .v8-result-on .v8-result__info,
+  .v8-result-on .v8-result__btns { opacity: 1 !important; transform: none !important; }
+}
+.v8-battle.v8-reduce .v8-result-on .v8-result,
+.v8-battle.v8-reduce .v8-result-on .v8-result__art,
+.v8-battle.v8-reduce .v8-result-on .v8-result__veil,
+.v8-battle.v8-reduce .v8-result-on .v8-result__title,
+.v8-battle.v8-reduce .v8-result-on .v8-result__reason,
+.v8-battle.v8-reduce .v8-result-on .v8-result__info,
+.v8-battle.v8-reduce .v8-result-on .v8-result__btns { opacity: 1 !important; transform: none !important; }
+
+/* =====================================================================
+   ★Stage 6-2：対戦中の設定（第21部）
+   ===================================================================== */
+.v8-set {
+  position: absolute;
+  inset: 0;
+  z-index: 57;
+  display: none;
+  flex-direction: column;
+  background: var(--v7-color-bg);
+}
+.v8-set-on .v8-set { display: flex; }
+
+.v8-set__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border-bottom: 1px solid var(--v8-line);
+}
+.v8-set__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(14 * var(--u)) calc(20 * var(--u)) calc(30 * var(--u));
+}
+.v8-set__row {
+  padding: calc(14 * var(--u)) 0;
+  border-bottom: 1px solid rgba(154, 133, 89, 0.22);
+}
+.v8-set__label { font-size: var(--v7-fs-body); color: var(--v8-text); }
+.v8-set__note {
+  margin-top: calc(4 * var(--u));
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+  line-height: 1.5;
+}
+.v8-set__choices {
+  display: flex;
+  gap: calc(10 * var(--u));
+  margin-top: calc(10 * var(--u));
+}
+.v8-set__choice {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: calc(10 * var(--u)) 0;
+  font-size: var(--v7-fs-button);
+}
+.v8-set__choice--on { background: var(--v8-accent); border-color: var(--v8-accent); }
+.v8-set__action {
+  margin-top: calc(10 * var(--u));
+  min-height: 44px;
+  padding: calc(10 * var(--u)) calc(20 * var(--u));
+  font-size: var(--v7-fs-button);
+}
+
+/* =====================================================================
+   ★Stage 6-4：対戦中の演出（v0.7以前の光を、この盤面へ写したもの）
+   ---------------------------------------------------------------------
+   既存の光は #stage の中の #fly-layer に描かれていて、
+   この盤面が上を覆うので一枚も見えていませんでした。
+
+   層は2枚あります。
+     v8-fx--low … 拡大手札より奥（山札→手札・山札→トラッシュ）
+     v8-fx--top … 拡大手札より手前（手札→トラッシュ）
+   手札から出ていく光だけが手前を通ります。奥だと札に隠れるためです。
+   ===================================================================== */
+.v8-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;   /* ★下の層のタップを飲み込まないこと（3回やった失敗） */
+  overflow: hidden;
+}
+.v8-fx--low { z-index: 43; }   /* 盤面カード(20〜30)より手前、拡大手札(46)より奥 */
+.v8-fx--top { z-index: 47; }   /* 拡大手札(46)より手前、クイック表示(48)より奥 */
+
+/* カード状の光。大きさは JS が実寸で入れます（--u と同じ比率） */
+.v8-fx__light {
+  position: absolute;
+  aspect-ratio: 63 / 88;
+  border-radius: calc(10 * var(--u));
+  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+  background: linear-gradient(155deg,
+              rgba(255, 255, 255, 0.95),
+              rgba(165, 220, 255, 0.72));
+  box-shadow: 0 0 calc(18 * var(--u)) calc(6 * var(--u)) rgba(160, 215, 255, 0.75),
+              0 0 calc(48 * var(--u)) calc(16 * var(--u)) rgba(110, 185, 255, 0.38);
+}
+
+/* トラッシュや山札へ戻る動きは暖色にして、増える動きと区別する */
+.v8-fx__light--warm {
+  background: linear-gradient(155deg,
+              rgba(255, 244, 220, 0.95),
+              rgba(255, 194, 140, 0.78));
+  box-shadow: 0 0 calc(18 * var(--u)) calc(6 * var(--u)) rgba(255, 200, 140, 0.7),
+              0 0 calc(48 * var(--u)) calc(16 * var(--u)) rgba(255, 155, 90, 0.35);
+}
+
+/* 使い終えたイベントや、倒れたカードの小さな光 */
+.v8-fx__light--small {
+  box-shadow: 0 0 calc(12 * var(--u)) calc(4 * var(--u)) rgba(255, 200, 140, 0.7),
+              0 0 calc(30 * var(--u)) calc(10 * var(--u)) rgba(255, 155, 90, 0.3);
+}
+
+/* 「動きを減らす」ときは光を出さない（3.7／21.2） */
+.v8-battle.v8-reduce .v8-fx { display: none; }
+
+/* ---------------------------------------------------------------------
+   ★確定した追跡の矢印（21.1〜21.2）
+   カードより後ろ・盤面の背景より前。操作は妨げません。
+   --------------------------------------------------------------------- */
+.v8-fx-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 19;            /* 盤面のカード(20)より後ろ */
+  pointer-events: none;
+  overflow: visible;
+}
+
+.v8-conveyor { transform-box: view-box; }
+/* 流れる動きは v08-fx.js が作ります。
+   速さを変えるときに位置が飛ばないよう、再生速度だけを変えるためです。 */
+
+.v8-chevron {
+  fill: none;
+  stroke: #ff5f6d;
+  stroke-width: calc(10 * var(--u));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.5;                 /* 半透明（21.2） */
+  transform-box: fill-box;      /* 山形1つぶんを基準に広げる */
+  transform-origin: center;
+  transition: transform 0.18s ease, stroke-width 0.18s ease,
+              opacity 0.18s ease, stroke 0.18s ease;
+}
+
+/* 襲撃中は赤く、速く、太く（21.4）。襲撃している組の矢印だけに付けます。 */
+.v8-chevron--attack {
+  stroke: #ff2f3f;
+  stroke-width: calc(15 * var(--u));
+  opacity: 0.95;
+  transform: scaleX(1.55) scaleY(1.3);   /* 描き直さずに横へ広げる */
+}
+
+/* ---------------------------------------------------------------------
+   ★暗転（2026-08-01）
+   対戦開始を押してから盤面が出るまで、画面全体を黒く落とします。
+
+   ★この幕は body に掛けます（対戦の盤面の中ではありません）。
+     準備画面から盤面へ入れ替わるところを覆うのが役目なので、
+     盤面の中に置くと、まだ出ていない時に掛けられません。
+   --------------------------------------------------------------------- */
+.v8-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;     /* いちばん手前。入れ替えの途中を覗かせない */
+  background: #000;
+  opacity: 0;
+  pointer-events: auto;    /* ★暗いあいだの操作は受け止めて捨てます */
+  touch-action: none;
+}
+
+/* ---------------------------------------------------------------------
+   ★中央でカードを見せる（2026-08-01）
+   山札からトラッシュへ置かれたカードと、手札から捨てたカードは、
+   いったんここで止まって「何だったか」を見せてから落ちます。
+   --------------------------------------------------------------------- */
+.v8-fx__reveal {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* ★あとから届く光より手前。でないと、2枚目の光がカードの上を通ります。 */
+  z-index: 5;
+}
+.v8-fx__reveal-card {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  /* ★盤面カードが持つ「位置が動くときの滑らかさ」は要りません。
+     置いた瞬間に滑り出してしまいます。 */
+  transition: none;
+  box-shadow: 0 0 calc(26 * var(--u)) calc(8 * var(--u)) rgba(255, 200, 140, 0.55),
+              0 calc(8 * var(--u)) calc(20 * var(--u)) rgba(0, 0, 0, 0.6);
+  /* ★短く。ここが長いと、光との重なりが台無しになります。 */
+  animation: v8-reveal-in 0.12s ease-out;
+}
+@keyframes v8-reveal-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.72); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* 「動きを減らす」ときは、この見せ方そのものを使いません（JS 側で判断） */
+
+/* ---------------------------------------------------------------------
+   ★襲撃（21.4）：ぶつかった所で弾ける光と、赤くなる体力の数字
+   --------------------------------------------------------------------- */
+.v8-fx__burst {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle,
+    rgba(255, 246, 224, 0.95) 0%,
+    rgba(255, 176, 120, 0.7) 26%,
+    rgba(220, 70, 60, 0.35) 52%,
+    rgba(220, 70, 60, 0) 72%);
+  animation: v8-burst 0.5s ease-out forwards;
+}
+@keyframes v8-burst {
+  0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  18%  { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
+/* 体力の数字。減る前に赤くして、どこが減るのかを見せる */
+.v8-card__stat--hp.v8-hp-hit {
+  animation: v8-hp-hit 0.42s ease-out;
+  background: #b0303a;
+  border-color: rgba(255, 154, 162, 0.9);
+  color: #fff;
+}
+@keyframes v8-hp-hit {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.42); }
+  100% { transform: scale(1); }
+}
+
+/* ★「動きを減らす」ときも「どこが減ったか」は見せます（色だけ残す） */
+.v8-battle.v8-reduce .v8-card__stat--hp.v8-hp-hit { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v8-fx__burst { animation: none; opacity: 0; }
+  .v8-card__stat--hp.v8-hp-hit { animation: none; }
+}
+
+/* =====================================================================
+   ★Stage 6-3：CPUの様子（既存の表示を新しい盤面へ写したもの）
+   ===================================================================== */
+.v8-cpu { position: absolute; inset: 0; z-index: 51; pointer-events: none; }
+
+.v8-cpu__think {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(196 * var(--u));
+  display: none;
+  padding: calc(8 * var(--u)) calc(20 * var(--u));
+  background: var(--v8-panel);
+  border: 1px solid var(--v8-line);
+  border-radius: 999px;
+  font-size: var(--v7-fs-caption);
+  color: var(--v8-muted);
+}
+.v8-cpu__think.v8-on { display: block; animation: v8-cpu-blink 1.4s ease-in-out infinite; }
+@keyframes v8-cpu-blink { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+.v8-cpu__reveal {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10 * var(--u));
+}
+.v8-cpu__reveal.v8-on { display: flex; animation: v8-cpu-pop 0.24s ease-out; }
+@keyframes v8-cpu-pop {
+  from { opacity: 0; transform: translate(-50%, -46%) scale(0.92); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.v8-cpu__card {
+  width: calc(300 * var(--u));
+  aspect-ratio: 63 / 88;
+  border: 1px solid var(--v8-line);
+  border-radius: calc(12 * var(--u));
+  background-color: #0b1222;
+  background-size: cover;
+  background-position: center top;
+  box-shadow: 0 0 calc(30 * var(--u)) rgba(0, 0, 0, 0.8);
+}
+.v8-cpu__name {
+  padding: calc(6 * var(--u)) calc(16 * var(--u));
+  background: rgba(10, 17, 32, 0.92);
+  border: 1px solid var(--v8-line);
+  border-radius: var(--v7-radius-medium);
+  font-size: var(--v7-fs-body);
+  color: var(--v8-text);
+}
+
+/* ---------------------------------------------------------------------
+   ★詳細設定（第16部・2026-08-01）
+   シードはふだん使う設定ではないので、ここへしまいます。
+   機能そのものは残します（同じ展開をもう一度出すために要ります）。
+   --------------------------------------------------------------------- */
+.v8-prep__row--sub {
+  opacity: 0.9;
+  font-size: var(--v7-fs-caption);
+}
+.v8-prep__more { display: none; position: absolute; inset: 0; z-index: 60; }
+.v8-prep-more-on .v8-prep__more { display: block; }
+
+.v8-prep__morerow {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  margin: calc(10 * var(--u)) 0;
+}
+.v8-prep__morelabel { flex: 0 0 auto; font-size: var(--v7-fs-body); }
+
+.v8-prep__seed {
+  width: 100%;
+  min-height: 44px;                 /* タップ領域（3.4） */
+  box-sizing: border-box;
+  padding: calc(8 * var(--u)) calc(12 * var(--u));
+  border: 1px solid var(--v8-line);
+  border-radius: calc(8 * var(--u));
+  background: rgba(8, 10, 18, 0.85);
+  color: var(--v8-text);
+  font-size: var(--v7-fs-body);
+}
+/* ★「指定する」でなければ触らせません。
+   入れても使われないのに書けると、効いていると思われます。 */
+.v8-prep__seed:disabled { opacity: 0.4; }
+
+.v8-prep__morenote {
+  margin: calc(8 * var(--u)) 0 calc(14 * var(--u));
+  color: var(--v8-muted);
+  font-size: var(--v7-fs-caption);
+  line-height: 1.5;
+}
+.v8-prep__moreclose { width: 100%; min-height: 44px; }
+
+/* ★v0.10：選択肢が3つ以上の問い（効果の選択肢・並べる順・効果の解決順）は縦に並べる */
+.v8-confirm__row.v8-confirm__row--list { flex-direction: column; align-items: stretch; max-height: 60vh; overflow-y: auto; }
+.v8-confirm__row.v8-confirm__row--list .v8-confirm__btn { width: 100%; white-space: normal; }
+/* ★v0.10：起動型の能力のボタン（クイック表示の中） */
+.v8-quick__ability { display: block; width: 100%; margin-top: calc(14 * var(--u)); min-height: 44px; white-space: normal; }
+/* ★v0.10：除外ゾーンと物音の数（山札・トラッシュの並び） */
+.v8-counts__item[hidden] { display: none !important; }
+.v8-counts__tag { font-size: var(--v7-fs-caption); opacity: 0.8; margin-right: 0.2em; }
+.v8-counts__item--exile, .v8-counts__item--noise { cursor: pointer; }

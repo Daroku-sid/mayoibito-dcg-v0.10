@@ -1,0 +1,3579 @@
+/* =====================================================================
+   マヨイビト v0.3 ― 画面のレイアウト
+   ---------------------------------------------------------------------
+   考え方：
+     ・1080×1920 の「設計座標」で位置を書く（ラフ画像と同じ座標）
+     ・画面の大きさに合わせて、全体を等倍で縮小する（縦横比は9:16固定）
+     ・そのため、どの端末でもスクロールは発生しない
+
+   調整したい数値は、すべて下の :root にまとめてあります。
+   ===================================================================== */
+
+:root {
+  /* ---- 遠近感（仮の値。実画面を見ながら調整します） ---- */
+  --board-perspective: 850px;   /* 遠近の強さ。小さいほど強い */
+  --board-tilt: 7deg;           /* 盤面の傾き */
+  --far-card-scale: 0.90;       /* 奥（相手側）のカードの縮小率 */
+
+  /* ---- 手札の扇 ----
+     3つを別々に調整できるようにしています。
+       spacing … カード同士の横の間隔（広いほど見やすい）
+       arc     … 弧の深さ。中央のカードが持ち上がる量
+       spread  … 端のカードの傾き（合計角度）*/
+  --fan-spacing: 120px;
+  --fan-arc: 30px;
+  --fan-spread: 20deg;
+  --fan-lift: 35px;             /* 選択したカードのせり出し量 */
+  --fan-selected-scale: 1.14;   /* 選択したカードの拡大率 */
+  --fan-bottom: 90px;           /* 画面下端からの距離（大きいほど上へ） */
+
+  /* ---- 場（盤面・山札・各ボタン）をまとめて上下させる量 ----
+     上端UIとのすき間が空きすぎる分を詰めるために使います。
+     値を大きくするほど、場の要素が一体のまま上へ動きます。
+     並びのバランスは崩れません（全部が同じ量だけ動くため）。 */
+  --play-shift: 75px;
+
+  /* 盤面の各段の位置。詰めるとカードを大きくできます。 */
+  --row-opp-normal: 250px;
+  --row-opp-track: 495px;
+  --row-self-track: 880px;
+  --row-self-normal: 1300px;
+
+  /* ---- フィールドカードの表示の大きさ ----
+     相手側は少し小さくして、奥にある感じを出します。 */
+  --field-h: 200px;       /* 自分側 */
+  --field-h-opp: 180px;   /* 相手側 */
+
+  /* ---- 現在値オーバーレイ（カード画像の上に重ねる今の数値） ----
+     カード画像に印刷されている数字は「基礎値」なので、
+     補正やダメージを反映した「今の値」をこの位置に重ねます。
+     位置はカード幅・高さに対する割合で指定します。 */
+  --ov-size: 0.30;       /* 数値枠の大きさ（カード幅に対する割合） */
+  --ov-left: 0;          /* 並びの左端（カード幅に対する割合） */
+  --ov-bottom: 0;        /* 並びの下端（カード高さに対する割合） */
+  --ov-gap: 0;           /* 枠と枠のすき間（0で枠どうしが接する） */
+
+  /* ---- 追跡矢印 ---- */
+  --pursuit-arrow-speed: 2.2s;         /* 追跡中の流れる速さ */
+  --pursuit-arrow-color: #ff5f6d;      /* 追跡中の色（赤系） */
+  --pursuit-attack-speed: 0.38s;       /* 襲撃時の速さ */
+  --pursuit-attack-color: #ff2f3f;     /* 襲撃時の色（より鮮やかな赤） */
+
+  /* ---- 配色 ---- */
+  --bg: #05060b;
+  --band: #16203c;
+  --line: #2f3a55;
+  --card-face: #f7f7f4;
+  --card-line: #1b1b22;
+  --card-back: #24304e;
+  --text: #f2f2f5;
+  --text-dark: #14141c;
+  --accent: #ffd36b;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #000;
+  color: var(--text);
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  /* 長押ししたときに、文字選択やコピーのメニューが出ないようにする。
+     カードを長押しする操作と衝突するため。 */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+  overflow: hidden;             /* 画面スクロールは行わない（仕様書 4.2） */
+}
+
+/* =====================================================================
+   画面枠：9:16 を保ったまま中央へ収める
+   ===================================================================== */
+/* どの要素でも「素早い2回タップで拡大」が起きないようにする */
+* { touch-action: manipulation; }
+
+#viewport {
+  position: fixed;
+  inset: 0;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* ノッチ・ホームバーを避ける */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+           env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+#stage {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  /* 指の操作をすべて自前で扱う（画面のスクロールや拡大縮小をさせない） */
+  touch-action: none;
+  flex: 0 0 auto;
+  background: var(--bg);
+  overflow: hidden;
+  /* JS が --fit（縮小率）を設定します */
+  transform: scale(var(--fit, 0.3));
+  transform-origin: center center;
+}
+
+/* =====================================================================
+   盤面の層（ここにだけ斜め視点をかける）
+   固定UIと手札は傾けない＝文字が読みやすい（仕様書 5.3）
+   ===================================================================== */
+#board-plane {
+  position: absolute;
+  inset: 0;
+  perspective: var(--board-perspective);
+  perspective-origin: 50% 50%;
+}
+#board-plane > .zone {
+  transform: rotateX(var(--board-tilt));
+  transform-style: preserve-3d;
+}
+
+/* =====================================================================
+   カードの見た目（すべて 63:88 に統一）
+   ===================================================================== */
+.card {
+  position: relative;
+  aspect-ratio: 63 / 88;
+  background: var(--card-face);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 2px solid var(--card-line);
+  border-radius: 8px;
+  color: var(--text-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 20px;
+  line-height: 1.3;
+  flex: 0 0 auto;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+  -webkit-user-drag: none;
+}
+.card--back {
+  background: var(--card-back);
+  border-color: #0d1526;
+  color: #93a3c4;
+}
+.card__label { font-size: 20px; line-height: 1.3; }
+/* 画像付きのカードは、カード絵そのものが枠を持っている。
+   下地の白や枠線が角の透明部分からはみ出さないよう消しておく。 */
+.card.has-image {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55));
+
+  /* ★角の丸みを、カード絵そのものの丸みに合わせます（v0.6.9）。
+     絵の角の丸みは、実測で幅の 3.9% でした。
+     固定の px にすると、大きく表示したときに足りず、
+     四隅に白がのぞきます（画像側でも白は消してありますが、
+     丸めの形をそろえておくと影の出方も自然になります）。
+
+     カードの font-size には幅が入っているので（現在値バッジ用）、
+     em で書けば幅に比例します。 */
+  border-radius: 0.039em;
+}
+.card.has-image > .card__label { display: none; }
+.card--landscape { aspect-ratio: 1039 / 744; }
+
+/* --- 現在値オーバーレイ ---
+   カード画像に印刷された数字の上に、今の値を重ねます。
+   丸だと隣とぶつかるため、四角の枠を横一列に並べています。
+   （左から スピード / 体力 / 蓄積ダメージ）
+   ------------------------------------------------------------------ */
+.ov-row {
+  position: absolute;
+  left: calc(var(--ov-left) * 100%);
+  bottom: calc(var(--ov-bottom) * 100%);
+  display: flex;
+  align-items: stretch;
+  /* すき間は数字の大きさに連動させる（カードが小さくなっても比率が保たれる） */
+  gap: calc(var(--ov-gap) * 1em);
+  /* 文字サイズはカード幅に連動（.card に font-size: カード幅 を入れてある） */
+  font-size: calc(var(--ov-size) * 0.62em);
+  z-index: 3;
+}
+.ov {
+  /* ここから下の em は「この枠の文字サイズ」が基準になる */
+  min-width: 1.05em;
+  padding: 0.16em 0.18em;
+  border-radius: 0.22em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  line-height: 1;
+  color: #fff;
+  background: rgba(8, 10, 18, 0.9);
+  border: 0.09em solid rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+/* 基礎値から上がっている／下がっているときの色分け */
+.ov.is-up   { color: #8ef5a0; border-color: #8ef5a0; }
+.ov.is-down { color: #ff9a9a; border-color: #ff9a9a; }
+/* 蓄積ダメージ用の赤枠。
+   盤面では体力の枠が赤くなることで把握できるため表示していません。
+   拡大詳細などで必要になったときのために定義だけ残しています。 */
+.ov--dmg {
+  background: #b8232f;
+  border-color: #ffd9dc;
+  color: #fff;
+}
+
+/* =====================================================================
+   盤面のゾーン
+   ---------------------------------------------------------------------
+   左半分＝自分の怪異と相手の人間／右半分＝自分の人間と相手の怪異
+   （追跡ペアが中央をはさんで縦に向かい合う）
+   ===================================================================== */
+.zone {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
+}
+body.show-guides .zone { outline: 1px dashed rgba(255, 211, 107, 0.55); }
+
+/* --- 相手の通常盤面（奥・小さめ） --- */
+.zone--opp-normal-human  { left: 85px; top: calc(var(--row-opp-normal) - var(--play-shift)); width: 430px; }
+.zone--opp-normal-youkai { left: 565px; top: calc(var(--row-opp-normal) - var(--play-shift)); width: 430px; }
+.zone--opp-normal-human .card,
+.zone--opp-normal-youkai .card {
+  width: var(--opp-normal-w, 160px);
+  font-size: var(--opp-normal-w, 160px);   /* 現在値バッジの文字がこの幅に連動する */
+}
+
+/* --- 相手の追跡カード（左：追跡されている人間／右：追跡している怪異） --- */
+.zone--opp-track-human  { left: 280px; top: calc(var(--row-opp-track) - var(--play-shift)); width: 232px; }
+.zone--opp-track-youkai { left: 574px; top: calc(var(--row-opp-track) - var(--play-shift)); width: 232px; }
+.zone--opp-track-human .card,
+.zone--opp-track-youkai .card { width: 232px; font-size: 232px; }
+
+/* --- 自分の追跡カード（左：追跡している怪異／右：追跡されている人間） --- */
+.zone--self-track-youkai { left: 276px; top: calc(var(--row-self-track) - var(--play-shift)); width: 243px; }
+.zone--self-track-human  { left: 569px; top: calc(var(--row-self-track) - var(--play-shift)); width: 243px; }
+.zone--self-track-youkai .card,
+.zone--self-track-human .card { width: 243px; font-size: 243px; }
+
+/* --- 自分の通常盤面（手前・大きめ） --- */
+.zone--self-normal-youkai { left: 21px;  top: calc(var(--row-self-normal) - var(--play-shift)); width: 510px; }
+.zone--self-normal-human  { left: 549px; top: calc(var(--row-self-normal) - var(--play-shift)); width: 510px; }
+.zone--self-normal-youkai .card,
+.zone--self-normal-human .card {
+  width: var(--self-normal-w, 189px);
+  font-size: var(--self-normal-w, 189px);
+}
+/* カードが0枚でもドロップ先として掴めるよう、高さを確保しておく */
+.zone--self-normal-youkai,
+.zone--self-normal-human { min-height: calc(var(--self-normal-w, 189px) * 1.3968); }
+
+/* 左右のレーンを入れ替える（設定画面の「左右を反転」）。
+   置き場所の役割はそのままに、左右の位置だけを取り替えます。 */
+body.mirror-lanes .zone--opp-normal-human   { left: 565px; }
+body.mirror-lanes .zone--opp-normal-youkai  { left: 85px; }
+body.mirror-lanes .zone--opp-track-human    { left: 574px; }
+body.mirror-lanes .zone--opp-track-youkai   { left: 280px; }
+body.mirror-lanes .zone--self-track-youkai  { left: 569px; }
+body.mirror-lanes .zone--self-track-human   { left: 276px; }
+body.mirror-lanes .zone--self-normal-youkai { left: 549px; }
+body.mirror-lanes .zone--self-normal-human  { left: 21px; }
+
+/* 奥のカードを少し小さく見せる（遠近感の補助） */
+.zone--opp-normal-human,
+.zone--opp-normal-youkai,
+.zone--opp-track-human,
+.zone--opp-track-youkai { scale: var(--far-card-scale); }
+
+/* --- コンベア風の追跡矢印（仕様書 21） ---
+   怪異から人間へ、山形の模様がゆっくり流れ続けます。
+   カードより後ろ・盤面背景より前に置き、操作は妨げません。 */
+#pursuit-arrows,
+#drag-arrow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+#drag-arrow { z-index: 145; }   /* 仮矢印はカードより前に出す（仕様書 21.3） */
+
+.conveyor { transform-box: view-box; }
+/* 流れる動きは preview.js が作ります。
+   速さを変えるときに位置が飛ばないよう、再生速度だけを変えられるようにするためです。 */
+
+.chevron {
+  fill: none;
+  stroke: var(--pursuit-arrow-color);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.5;                 /* 半透明（仕様書 21.2） */
+  transform-box: fill-box;      /* 山形1つ分を基準に拡大する */
+  transform-origin: center;
+  transition: transform 0.18s ease, stroke-width 0.18s ease,
+              opacity 0.18s ease, stroke 0.18s ease;
+}
+
+/* 襲撃時は赤く、速く（仕様書 21.4）
+   襲撃しているペアの矢印だけに付けます。 */
+.chevron.is-attack {
+  stroke: var(--pursuit-attack-color);
+  opacity: 0.95;
+  stroke-width: 15;
+  transform: scaleX(1.55) scaleY(1.3);   /* 描き直さずに横へ広げる */
+}
+
+/* 追跡選択中の仮矢印（細い線） */
+.temp-arrow {
+  stroke: var(--pursuit-arrow-color);
+  stroke-width: 6;
+  stroke-dasharray: 18 14;
+  opacity: 0.9;
+  fill: none;
+}
+.temp-arrow-head { fill: var(--pursuit-arrow-color); opacity: 0.9; }
+
+/* 追跡の候補に選ばれているカード（仕様書 19.2） */
+.card.is-candidate {
+  outline: 5px solid #ffd36b;
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+/* =====================================================================
+   固定UI（傾けない）
+   ===================================================================== */
+.band {
+  position: absolute;
+  left: 0;
+  width: 1080px;
+  height: 88px;
+  background: var(--band);
+}
+.band--top { top: 0; }
+.band--bottom { bottom: 0; }
+
+.ui-box {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  font-size: 22px;
+}
+body.show-guides .ui-box { outline: 1px dashed rgba(122, 209, 255, 0.5); }
+
+/* --- 気力（4 / 18） --- */
+.energy-box {
+  width: 180px;
+  height: 124px;
+  flex-direction: column;
+  gap: 2px;
+  background: #0e1526;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+}
+.energy-box__label { font-size: 24px; color: #9fb0cf; }
+.energy-box__value { font-size: 52px; font-weight: bold; line-height: 1; }
+.energy-box--self { left: 5px;   top: 1796px; }
+.energy-box--opp  { left: 900px; top: 0px; }
+
+/* --- トラッシュ・ログ・メイン終了（六角形） --- */
+.hexbtn {
+  background: #223257;
+  border: 2px solid var(--line);
+  clip-path: polygon(12% 0, 88% 0, 100% 50%, 88% 100%, 12% 100%, 0 50%);
+  font-size: 21px;
+  text-align: center;
+  padding: 0 10px;
+}
+.hexbtn--self-trash { left: 195px; top: 1834px; width: 200px; height: 86px; font-size: 26px; }
+.hexbtn--opp-trash  { left: 690px; top: 0px;    width: 200px; height: 86px; font-size: 26px; }
+.hexbtn--log  { left: 8px;   top: calc(1020px - var(--play-shift)); width: 170px; height: 120px; font-size: 36px; }
+.hexbtn--main { left: 870px; top: calc(780px - var(--play-shift));  width: 200px; height: 140px; font-size: 30px; }
+
+/* --- 設定（丸） --- */
+.roundbtn {
+  left: 12px;
+  top: calc(830px - var(--play-shift));
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: #223257;
+  border: 2px solid var(--line);
+  font-size: 30px;
+}
+
+/* --- フィールドカード＋ロスト数（2 / 20） --- */
+.field-box {
+  /* 横長カード（1039:744）の比率に合わせて横幅を決める */
+  width: calc(var(--field-h) * 1.3965);
+  height: var(--field-h);
+  background: #0e1526;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+/* 画面のちょうど中央に置く。大きさを変えても中央のまま。
+   中央配置なので、自分側と相手側の左位置は同じ値になる（点対称も保たれる）。 */
+.field-box--self { left: calc((1080px - var(--field-h) * 1.3965) / 2); top: calc(1920px - var(--field-h)); }
+/* 相手側は自分側より小さいので、中央の計算もそれ用の値で行う */
+.field-box--opp {
+  width: calc(var(--field-h-opp) * 1.3965);
+  height: var(--field-h-opp);
+  left: calc((1080px - var(--field-h-opp) * 1.3965) / 2);
+  top: 0px;
+}
+.field-box__card {
+  width: 100%;
+  height: 100%;              /* 枠いっぱいに大きく表示する */
+  cursor: pointer;
+  background: var(--card-face);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid var(--card-line);
+  border-radius: 5px;
+  color: var(--text-dark);
+  font-size: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 0 0 auto;
+}
+/* ロスト数はフィールドカードの上に重ねる（カードを大きく見せるため） */
+.field-box__lost {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(6, 9, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.field-box__label { font-size: 17px; color: #b9c8e4; }
+.field-box__value { font-size: 30px; font-weight: bold; line-height: 1; }
+
+/* --- 山札（7 / 15）枚数は常時表示 --- */
+.deck-box {
+  width: 175px;
+  height: 260px;      /* 枚数(34) + 余白(4) + カード(222) */
+  flex-direction: column;
+  gap: 4px;
+}
+.deck-box--self { left: 893px; top: calc(940px - var(--play-shift)); }
+.deck-box--opp  { left: 12px;  top: calc(530px - var(--play-shift)); }
+.deck-box__count {
+  font-size: 21px;
+  color: #cfe0ff;
+  background: rgba(10, 16, 30, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.deck-box__card {
+  width: 159px;
+  aspect-ratio: 63 / 88;
+  background: var(--card-back);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid #0d1526;
+  border-radius: 8px;
+  color: #93a3c4;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- 簡略手札（1 / 21）裏向きの重ね＋枚数 --- */
+.hand-mini {
+  width: 380px;
+  height: 124px;
+  gap: 10px;
+  background: rgba(14, 21, 38, 0.9);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.hand-mini--self { left: 700px; top: 1796px; }
+.hand-mini--opp  { left: 30px;  top: 0px; }
+.hand-mini__stack {
+  position: relative;
+  flex: 0 0 auto;
+  width: 250px;     /* ここに最大10枚を重ねて並べる */
+  height: 84px;
+}
+.hand-mini__back {
+  position: absolute;
+  top: 0;
+  width: 60px;
+  height: 84px;
+  background: var(--card-back);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid #0d1526;
+  border-radius: 5px;
+}
+.hand-mini__count {
+  font-size: 46px;
+  font-weight: bold;
+  min-width: 62px;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+/* =====================================================================
+   自分の拡大手札（扇状・最前面）
+   ===================================================================== */
+/* =====================================================================
+   ドラッグ＆ドロップ（仕様書 17〜18）
+   ===================================================================== */
+
+/* ドラッグ中のカードを乗せる層 */
+#drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 150;
+  pointer-events: none;   /* 下のドロップ先を判定できるようにする */
+}
+
+/* 指に追従するカード本体 */
+.drag-ghost {
+  position: absolute;
+  width: 190px;
+  aspect-ratio: 63 / 88;
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.65));
+  transform: translate(-50%, -50%) scale(1.12);   /* 少し拡大・傾きは0度 */
+}
+.drag-ghost.is-returning {
+  transition: left 0.18s ease, top 0.18s ease;    /* 失敗時に元位置へ戻す */
+}
+
+/* 元位置に残す薄いプレースホルダー */
+.fan-card.is-dragging { opacity: 0.28; }
+
+/* ドラッグ中、置けない場所は軽く暗くする（置ける場所だけが目立つ）
+   ------------------------------------------------------------------
+   注意：カードには影を付けるための filter が別に指定されている。
+   filter は後勝ちではなく「詳しく書いたほうが勝つ」ため、
+   カード向けには影と暗転をまとめて書き直す必要がある。 */
+.is-dimmed {
+  filter: brightness(0.42) saturate(0.7);
+  transition: filter 0.15s ease;
+}
+/* 画像付きカード（影あり）＋暗転 */
+.card.has-image.is-dimmed {
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55)) brightness(0.42) saturate(0.7);
+}
+/* 選択中の手札（黄色い光）＋暗転 */
+.fan-card.is-selected.is-dimmed {
+  filter: drop-shadow(0 0 18px rgba(255, 211, 107, 0.9)) brightness(0.42) saturate(0.7);
+}
+
+/* 有効なドロップ先の強調 */
+.is-drop-target {
+  outline: 4px dashed rgba(140, 220, 255, 0.85);
+  outline-offset: 6px;
+  border-radius: 10px;
+}
+.is-drop-hover {
+  outline-color: #ffd36b;
+  outline-style: solid;
+  /* background の一括指定は使わない。
+     カードの背景画像の設定（cover など）まで初期化されてしまうため。 */
+  background-color: rgba(255, 211, 107, 0.14);
+}
+
+/* イベント用の一時的なドロップ先 */
+#event-drop {
+  position: absolute;
+  /* 左右は設定・ログ・メイン終了・山札に掛からない範囲、
+     下は自分の通常盤面（y=1280）の手前まで広げてある */
+  left: 180px;
+  top: 740px;
+  width: 710px;
+  height: 520px;
+  z-index: 140;
+  background-color: rgba(120, 190, 255, 0.07);
+  border: 3px dashed rgba(140, 220, 255, 0.5);
+  border-radius: 16px;
+}
+#event-drop.is-hidden { display: none; }
+#event-drop.is-drop-hover {
+  border-color: #ffd36b;
+  border-style: solid;
+  background-color: rgba(255, 211, 107, 0.16);
+}
+
+/* =====================================================================
+   決着の画面
+   ===================================================================== */
+#result-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 166;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 18, 0.94);
+  padding: 50px;
+}
+#result-screen.is-open { display: flex; }
+
+.result {
+  width: 100%;
+  max-width: 920px;
+  max-height: 100%;
+  overflow-y: auto;
+  text-align: center;
+}
+
+.result__phase {
+  font-size: 30px;
+  color: #9fb0cc;
+  letter-spacing: 0.08em;
+}
+.result__title {
+  margin-top: 14px;
+  white-space: pre-line;    /* 陣営名と「の勝利」で行を分ける */
+  font-size: 96px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  color: #ffe7a8;
+  text-shadow: 0 0 40px rgba(255, 200, 110, 0.5);
+}
+.result__title.is-draw { color: #cfe0ff; text-shadow: 0 0 40px rgba(150, 200, 255, 0.45); }
+
+.result__reason {
+  margin-top: 18px;
+  font-size: 30px;
+  line-height: 1.6;
+  color: #dbe6f8;
+  white-space: pre-wrap;
+}
+
+/* 両者の最終状態をならべた表 */
+.result__table {
+  margin-top: 34px;
+  display: grid;
+  grid-template-columns: 1fr 220px 1fr;
+  gap: 0 12px;
+  font-size: 28px;
+  color: #e8eefc;
+}
+.result__head {
+  padding: 12px 8px;
+  font-size: 30px;
+  font-weight: bold;
+  border-bottom: 3px solid var(--line);
+}
+.result__head--win { color: #ffe7a8; }
+.result__key {
+  padding: 12px 8px;
+  color: #9fb0cc;
+  font-size: 25px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.result__val {
+  padding: 12px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.result__val.is-lose { color: #ff9a9a; font-weight: bold; }
+
+.result__buttons {
+  margin-top: 40px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.result__btn {
+  min-height: var(--tap);
+  font-size: 30px;
+  padding: 20px 34px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.result__btn--primary {
+  background: #2f4a7a;
+  border-color: #8fc0ff;
+  font-weight: bold;
+}
+
+/* ターン交代のときに画面を暗くする幕（大きな文字より後ろ） */
+#dim-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 144;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+#dim-screen.is-on { opacity: 0.92; }
+
+/* =====================================================================
+   ログ・トラッシュ・設定で使い回す画面
+   ===================================================================== */
+#sheet {
+  position: absolute;
+  inset: 0;
+  /* 対戦中メニュー（#game-menu は 174）より上に出します。
+     ここが下だと、メニューから開いた「遊び方」「設定」が
+     メニューの裏に隠れて読めません（v0.4 の不具合）。 */
+  z-index: 175;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 40px;
+}
+#sheet.is-open { display: flex; }
+
+.sheet {
+  width: 100%;
+  max-width: 980px;
+  max-height: 100%;
+  background: #121a2c;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+}
+.sheet__title { font-size: 48px; font-weight: bold; text-align: center; }
+.sheet__body {
+  margin-top: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  flex: 1;
+  min-height: 0;
+}
+.sheet__buttons { margin-top: 22px; display: flex; justify-content: center; }
+
+/* ログの1行 */
+.log__line {
+  font-size: 28px;
+  line-height: 1.5;
+  color: #d8e2f4;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: pre-wrap;
+}
+.log__line:nth-child(odd) { background: rgba(255, 255, 255, 0.035); }
+.log__empty { font-size: 30px; color: #9fb0cc; text-align: center; padding: 40px 0; }
+
+/* トラッシュの中身 */
+.trash__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  padding: 6px;
+}
+.trash__card {
+  width: 150px;
+  aspect-ratio: 63 / 88;
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55));
+}
+
+/* 設定の項目 */
+.set__row { padding: 18px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.set__label { font-size: 32px; font-weight: bold; }
+.set__note { margin-top: 6px; font-size: 24px; color: #9fb0cc; }
+.set__choices { margin-top: 12px; display: flex; gap: 14px; flex-wrap: wrap; }
+.set__choice {
+  min-height: var(--tap);
+  font-size: 28px;
+  padding: 12px 24px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.set__choice.is-on {
+  background: #2f4a7a;
+  border-color: #8fc0ff;
+  font-weight: bold;
+}
+.set__seed {
+  margin-top: 12px;
+  font-size: 28px;
+  padding: 10px 14px;
+  width: 100%;
+  border-radius: 8px;
+  border: 2px solid var(--line);
+  background: #0e1524;
+  color: #e8eefc;
+}
+
+/* 効果が発動するカードの強調 */
+.card.is-activating,
+.card.has-image.is-activating {
+  transform: translateY(-26px);
+  filter: brightness(1.4) drop-shadow(0 0 28px rgba(255, 232, 160, 0.95));
+  transition: transform 0.22s ease, filter 0.22s ease;
+  z-index: 6;
+}
+
+/* =====================================================================
+   対戦していないときは盤面を隠す（v0.4.4）
+   ---------------------------------------------------------------------
+   メニューの背景は半透明なので、隠さないと
+   前の対戦の盤面がうっすら透けて見えます。
+   ===================================================================== */
+body.no-match #board-plane,
+body.no-match #hand-fan,
+body.no-match .ui-box,
+body.no-match #fly-layer,
+body.no-match #fly-layer-top,
+body.no-match #drag-arrow,
+body.no-match #drag-layer,
+body.no-match #quick-detail,
+body.no-match #cpu-thinking {
+  display: none !important;
+}
+
+/* =====================================================================
+   襲撃の演出（v0.4.3・仕様書 21.4）
+   ===================================================================== */
+
+/* ぶつかった所で弾ける光 */
+.hit-burst {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  margin-left: -130px;
+  margin-top: -130px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle,
+    rgba(255, 246, 224, 0.95) 0%,
+    rgba(255, 176, 120, 0.7) 26%,
+    rgba(220, 70, 60, 0.35) 52%,
+    rgba(220, 70, 60, 0) 72%);
+  animation: hit-burst 0.5s ease-out forwards;
+}
+@keyframes hit-burst {
+  0%   { transform: scale(0.3); opacity: 0; }
+  18%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* 体力の数字。減る前に赤くして、どこが減るのかを見せる */
+.ov--hp.is-hit {
+  animation: hp-hit 0.42s ease-out;
+  background: #b0303a !important;
+  color: #fff !important;
+  border-color: #ff9aa2 !important;
+}
+@keyframes hp-hit {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.42); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hit-burst { animation: none; opacity: 0; }
+  .ov--hp.is-hit { animation: none; }
+}
+
+/* =====================================================================
+   指で押せる大きさ（v0.4）
+   ---------------------------------------------------------------------
+   この画面は1080×1920で作り、実機ではそれを縮めて表示します。
+   iPhone(390pt幅)だと約0.36倍になるので、
+   押せる目安の44ptを満たすには、画面上で122px必要です。
+
+   小さいボタンは「押したのに反応しない」と感じさせるので、
+   見た目より当たりを優先します。
+   ===================================================================== */
+:root {
+  --tap: 122px;        /* 44pt 相当。単独で押すボタンの最低の高さ */
+  --tap-dense: 104px;  /* 38pt 相当。並べて出す絞り込みボタンなど */
+}
+
+/* =====================================================================
+   対戦前のデッキ選択（v0.4・仕様書 17.5）
+   ---------------------------------------------------------------------
+   文字だけの選択肢ではなく、いま選んでいるデッキの顔が見える形にします。
+   自作デッキが増えると、名前だけでは中身を思い出せないためです。
+   ===================================================================== */
+.dpick {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  background: #141c2e;
+  color: #e8eefc;
+  cursor: pointer;
+  text-align: left;
+}
+.dpick__img { flex: 0 0 auto; width: 74px; border-radius: 8px; display: block; }
+.dpick__body { display: flex; flex-direction: column; gap: 4px; }
+.dpick__name { font-size: 30px; font-weight: bold; color: #eef4ff; }
+.dpick__sub { font-size: 22px; color: #93a7c6; }
+
+/* 選択画面のカード */
+.dcard.is-picked { border-color: #8fc0ff; background: #23324f; }
+.dcard.is-locked { cursor: default; }
+.dcard--simple { min-height: 190px; }
+
+/* =====================================================================
+   デッキ編成（v0.4・仕様書 15）
+   ===================================================================== */
+.dedit__name {
+  flex: 1;
+  min-height: var(--tap);
+  font-size: 32px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #0e1524;
+  color: #e8eefc;
+  text-align: center;
+}
+.dedit__save {
+  min-height: var(--tap);
+  font-size: 28px;
+  padding: 14px 32px;
+  border-radius: 12px;
+  border: 3px solid #8fc0ff;
+  background: #2f4a7a;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* 上段：フィールドと枚数配分 */
+.dedit__top {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px 10px;
+}
+/* 40枠が1画面に収まるよう、上段は控えめにします。
+   40枚をスクロールさせると、いま何枚入っているかが
+   一目で分からなくなるためです。 */
+.dedit__field {
+  flex: 0 0 30%;
+  aspect-ratio: 1039 / 744;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+.dedit__field img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dedit__field.is-empty {
+  background: #131b2c;
+  border: 3px dashed var(--line);
+  display: flex; align-items: center; justify-content: center;
+}
+.dedit__fieldhint { font-size: 22px; color: #93a7c6; text-align: center; padding: 10px; }
+
+.dedit__side { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
+.dedit__counts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.dedit__count {
+  display: flex; justify-content: space-between;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(19, 27, 44, 0.7);
+  border: 2px solid var(--line);
+  font-size: 22px;
+  color: #cfe0ff;
+}
+.dedit__count--total { grid-column: 1 / -1; border-color: #4f6a9e; font-weight: bold; }
+.dedit__state { font-size: 21px; color: #a9c6ef; line-height: 1.4; }
+.dedit__state.is-ng { color: #ffc9a0; }
+
+/* 中央：40枠（横8×縦5） */
+.dedit__gridwrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 20px 10px; }
+.dedit__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 7px;
+  border-radius: 10px;
+  padding: 6px;
+  border: 3px solid transparent;
+}
+.dedit__grid.is-target { border-color: #8fc0ff; background: rgba(47, 74, 122, 0.28); }
+
+.dslot {
+  position: relative;
+  aspect-ratio: 744 / 1039;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+}
+.dslot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dslot.is-blank {
+  background: rgba(19, 27, 44, 0.5);
+  border: 2px dashed var(--line);
+  cursor: default;
+}
+.dslot.is-ace { outline: 4px solid #ffd36b; outline-offset: -4px; }
+.dslot.is-hero { outline: 3px solid #7ad1ff; outline-offset: -3px; }
+/* 主人公の印（v0.5.7）。
+   「主」の一文字をやめ、錠前のマークにしました。
+   外せないカードであることが、字を読まなくても伝わります。
+
+   絵文字は端末ごとに姿が変わるので、ここで形を描いています。
+   縁の色（#7ad1ff）と揃えて、同じ意味だと分かるようにしました。 */
+.dslot__lock {
+  position: absolute; left: 4px; top: 4px;
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: #7ad1ff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+/* 錠前のつる（上の輪） */
+.dslot__lock::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 6px;
+  width: 12px; height: 9px;
+  margin-left: -6px;
+  border: 3px solid #04121e;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+}
+/* 錠前の本体 */
+.dslot__lock::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 14px;
+  width: 18px; height: 11px;
+  margin-left: -9px;
+  background: #04121e;
+  border-radius: 3px;
+}
+
+/* 下部：所持カードの帯 */
+.dband {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 20px;
+  border-top: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+  background: rgba(10, 14, 24, 0.9);
+}
+.dband.is-target { background: rgba(90, 36, 48, 0.5); }
+.dband__card {
+  position: relative;
+  flex: 0 0 auto;
+  /* デッキ側のマス（約122px）より一回り大きくします（v0.5.7）。
+     ここは「絵を見て選ぶ」ための一覧なので、
+     並んだ結果を見るデッキ側より大きいほうが選びやすいためです。
+
+     実機（iPhone）では 124px が約45pt幅でした。
+     指で押せる最低の大きさが44ptなので、ぎりぎりでした。
+     170px なら約61pt幅になり、絵柄も見分けられます。 */
+  width: 170px;
+  aspect-ratio: 744 / 1039;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.dband__card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dband__card.is-full { opacity: 0.42; }
+.dband__num {
+  position: absolute; right: 4px; bottom: 4px;
+  font-size: 24px; font-weight: bold; color: #fff;
+  background: rgba(8, 12, 22, 0.9);
+  border: 2px solid #4f6a9e; border-radius: 7px;
+  padding: 1px 8px;
+}
+
+.cltools--slim { padding: 12px 20px 16px; }
+
+/* ドラッグ中の影。transform だけを動かします */
+.dghost {
+  position: absolute;
+  left: 0; top: 0;
+  width: 124px;
+  pointer-events: none;
+  z-index: 183;
+  opacity: 0.82;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.6));
+}
+.dghost img { width: 100%; display: block; border-radius: 6px; }
+body.is-deckdrag { cursor: grabbing; }
+
+/* フィールドの選択 */
+.fpick__grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.fpick {
+  display: block; width: 100%; padding: 12px;
+  border-radius: 12px; border: 3px solid var(--line);
+  background: rgba(19, 27, 44, 0.8); cursor: pointer;
+}
+.fpick.is-on { border-color: #8fc0ff; background: #23324f; }
+.fpick img { width: 100%; border-radius: 8px; display: block; }
+.fpick__name { margin-top: 10px; font-size: 26px; color: #e8eefc; text-align: center; }
+.fpick__note { margin-top: 24px; font-size: 22px; color: #93a7c6; line-height: 1.6; text-align: center; }
+
+/* 編成中の拡大詳細 */
+#deck-edit-detail {
+  position: absolute; inset: 0;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 182; padding: 40px;
+}
+#deck-edit-detail.is-open { display: flex; }
+.dedetail { width: 100%; max-width: 760px; max-height: 100%; overflow-y: auto; text-align: center; }
+.dedetail__img { width: 56%; max-width: 430px; border-radius: 14px; display: block; margin: 0 auto; }
+.dedetail__name { margin-top: 20px; font-size: 36px; font-weight: bold; color: #eef4ff; }
+.dedetail__nums { margin-top: 12px; font-size: 25px; color: #cfe0ff; }
+.dedetail__effect {
+  display: none; margin-top: 16px; padding: 16px 20px;
+  border-radius: 12px; border: 2px solid var(--line);
+  background: rgba(19, 27, 44, 0.7);
+  font-size: 23px; line-height: 1.6; color: #e8eefc; text-align: left; white-space: pre-wrap;
+}
+.dedetail__effect.is-on { display: block; }
+.dedetail__why { display: none; margin-top: 14px; font-size: 22px; color: #ffd9a0; }
+.dedetail__why.is-on { display: block; }
+.dedetail__btns { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.dedetail__btn {
+  min-height: var(--tap);
+  font-size: 27px; padding: 16px 8px; border-radius: 12px;
+  border: 2px solid var(--line); background: #1a2338; color: #cfe0ff; cursor: pointer;
+}
+.dedetail__btn--primary { border-color: #8fc0ff; background: #2f4a7a; color: #fff; font-weight: bold; }
+.dedetail__btn.is-off { opacity: 0.35; cursor: default; }
+.dedetail__close {
+  min-height: var(--tap);
+  margin-top: 18px; font-size: 28px; padding: 16px 50px;
+  border-radius: 12px; border: 3px solid var(--line);
+  background: #141c2e; color: #e8eefc; cursor: pointer;
+}
+
+/* =====================================================================
+   デッキ一覧・デッキ確認（v0.4・仕様書 11・13）
+   ===================================================================== */
+
+/* --- デッキ一覧：2列（仕様書 11.1） --- */
+.decklist {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-content: start;
+}
+.dcard {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 20px;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  background: rgba(19, 27, 44, 0.86);
+  color: #e8eefc;
+  cursor: pointer;
+}
+.dcard--unusable { opacity: 0.5; }        /* 使用不可は暗く（仕様書 11.5） */
+
+.dcard__head { display: flex; align-items: baseline; gap: 12px; }
+.dcard__name { flex: 1; font-size: 32px; font-weight: bold; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+.dcard__kind { font-size: 21px; color: #93a7c6; flex: 0 0 auto; }
+
+.dcard__meta { display: flex; justify-content: space-between; margin-top: 8px; }
+.dcard__tactics { font-size: 23px; color: #a9c6ef; }
+.dcard__num { font-size: 23px; color: #cfe0ff; }
+
+.dcard__arts { display: flex; align-items: flex-end; gap: 12px; margin-top: 14px; }
+.dcard__ace { flex: 0 0 34%; aspect-ratio: 744 / 1039; border-radius: 8px; overflow: hidden; }
+.dcard__field { flex: 1 1 auto; aspect-ratio: 1039 / 744; border-radius: 8px; overflow: hidden; }
+.dcard__ace img, .dcard__field img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dcard__ace.is-empty, .dcard__field.is-empty { background: #131b2c; border: 2px dashed var(--line); }
+
+.dcard__time { margin-top: 10px; font-size: 20px; color: #7f92b0; }
+.dcard__state { margin-top: 8px; font-size: 22px; color: #93a7c6; line-height: 1.4; }
+.dcard--unusable .dcard__state { color: #ffb9a0; }
+.dcard__tag {
+  position: absolute;
+  top: 16px; right: 16px;
+  font-size: 20px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: #5a2430;
+  border: 2px solid #a05262;
+  color: #ffd9d9;
+}
+
+/* デッキ一覧の下部 */
+.dlfoot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 24px 26px;
+  border-top: 2px solid var(--line);
+  background: rgba(10, 14, 24, 0.95);
+}
+.dlfoot__note { flex: 1; font-size: 22px; color: #ffd9a0; display: none; }
+.dlfoot__note.is-on { display: block; }
+.dlfoot__add {
+  min-height: var(--tap);
+  margin-left: auto;
+  font-size: 30px;
+  padding: 18px 46px;
+  border-radius: 14px;
+  border: 3px solid #8fc0ff;
+  background: #2f4a7a;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+}
+.dlfoot__add.is-off { opacity: 0.4; border-color: var(--line); background: #1a2338; cursor: default; }
+
+/* --- デッキ確認（仕様書 13） --- */
+.dview__time { font-size: 22px; color: #7f92b0; margin-bottom: 14px; }
+.dview__top { display: flex; gap: 20px; align-items: flex-start; }
+.dview__field { flex: 0 0 38%; }
+.dview__fieldimg { width: 100%; aspect-ratio: 1039 / 744; border-radius: 10px; overflow: hidden; }
+.dview__fieldimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dview__fieldimg.is-empty { background: #131b2c; border: 2px dashed var(--line); }
+
+.dview__counts {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+.dview__count {
+  display: flex; justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(19, 27, 44, 0.7);
+  border: 2px solid var(--line);
+}
+.dview__count--total { grid-column: 1 / -1; border-color: #4f6a9e; }
+.dview__ckey { font-size: 24px; color: #93a7c6; }
+.dview__cval { font-size: 24px; color: #e8eefc; font-weight: bold; }
+
+.dview__problems { display: none; margin-top: 18px; padding: 18px 22px;
+  border-radius: 12px; border: 2px solid #a05262; background: rgba(50, 20, 28, 0.6); }
+.dview__problems.is-on { display: block; }
+.dview__phead { font-size: 25px; color: #ffd9d9; font-weight: bold; margin-bottom: 10px; }
+.dview__pitem { font-size: 22px; color: #ffc9c9; line-height: 1.6; }
+
+/* 40枚：横8×縦5（仕様書 13.2） */
+.dview__grid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+}
+.dview__card { aspect-ratio: 744 / 1039; border-radius: 6px; overflow: hidden; cursor: pointer; }
+.dview__card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dview__card.is-blank, .dview__card.is-empty {
+  background: rgba(19, 27, 44, 0.5);
+  border: 2px dashed var(--line);
+  cursor: default;
+}
+
+.dvfoot {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 20px 24px 26px;
+  border-top: 2px solid var(--line);
+  background: rgba(10, 14, 24, 0.95);
+}
+.dvfoot__btn {
+  min-height: var(--tap);
+  font-size: 27px;
+  padding: 18px 6px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #1a2338;
+  color: #cfe0ff;
+  cursor: pointer;
+}
+.dvfoot__btn--danger { border-color: #6a3040; background: #2a1418; color: #ffb9c0; }
+
+/* =====================================================================
+   カード一覧（v0.4・仕様書 16）
+   ---------------------------------------------------------------------
+   上のバー・カードの並び・下の道具立ての3段構成。
+   カードが減っても上下のバーが動かないよう、
+   この画面だけ縦のflexにして、真ん中だけを流れるようにします。
+   （.menu は既定では display:block なので、ここで上書きします）
+   ===================================================================== */
+/* ★セレクタを .menu.menu--wide.is-open と重ねているのは、
+   後ろにある .menu.is-open { display: block } に負けないためです。
+   同じ強さだと後から書かれたほうが勝つので、ここだけ1段強くしています。
+
+   位置も absolute で画面へ貼り付けます。
+   親が中央そろえの flex なので、height:100% だけでは
+   高さが決まらず、下のバーが画面の外へ出てしまうためです。 */
+.menu.menu--wide.is-open {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  max-width: none;       /* 一覧は画面いっぱいに使う */
+  max-height: none;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;      /* 流れるのは中の .cardlist__scroll だけ */
+}
+
+/* 上部の固定バー */
+.listbar {
+  flex: 0 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 26px 30px;
+  border-bottom: 2px solid var(--line);
+  background: rgba(10, 14, 24, 0.92);
+}
+.listbar__back {
+  min-height: var(--tap);
+  padding: 14px 32px;
+  font-size: 28px;
+    border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #1a2338;
+  color: #cfe0ff;
+  cursor: pointer;
+}
+.listbar__title { flex: 1; font-size: 40px; font-weight: bold; color: #eef4ff; text-align: center; }
+.listbar__count { font-size: 24px; color: #93a7c6; min-width: 170px; text-align: right; }
+
+/* カードが流れる場所。ここだけがスクロールする。
+   flex: 1 1 0 と min-height: 0 で、中身の量にかかわらず高さが変わらない */
+.cardlist__scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 22px 20px 30px;
+}
+
+/* 縦向きのカードは6列（仕様書 16.1） */
+.cardlist {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  align-content: start;
+}
+
+/* フィールドは横向きなので4列。縦向きの列とは揃えない */
+.cardlist--field {
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 4px;
+}
+
+/* 縦向きと横向きのあいだの区切り */
+.cardlist__sep {
+  display: none;
+  margin: 30px 0 14px;
+  padding-top: 22px;
+  border-top: 2px solid var(--line);
+  font-size: 26px;
+  color: #93a7c6;
+  letter-spacing: 0.08em;
+}
+.cardlist__sep.is-on { display: block; }
+
+.cardlist__empty {
+  display: none;
+  padding: 60px 40px;
+  font-size: 30px;
+  color: #93a7c6;
+  text-align: center;
+}
+.cardlist__empty.is-on { display: block; }
+
+.clcard {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  aspect-ratio: 744 / 1039;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.clcard--field { aspect-ratio: 1039 / 744; }
+
+.clcard__img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.clcard.is-noimage {
+  background: #1d2740;
+  border: 2px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.clcard.is-noimage .clcard__img { display: none; }
+.clcard__alt { font-size: 18px; color: #cfe0ff; padding: 8px; text-align: center; line-height: 1.3; }
+
+/* 所持枚数（仕様書 16.2） */
+.clcard__count {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #fff;
+  background: rgba(8, 12, 22, 0.88);
+  border: 2px solid #4f6a9e;
+  border-radius: 8px;
+  padding: 2px 8px;
+  line-height: 1.2;
+}
+
+/* 最下部の検索・絞り込み・並び替え（仕様書 16.1） */
+.cltools {
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 18px 20px 24px;
+  border-top: 2px solid var(--line);
+  background: rgba(10, 14, 24, 0.95);
+}
+/* ★v0.9：カード名と特徴を横に並べていた器。作り直しで使わなくなりました。
+   （Phase 5 の撤去対象。いまは消さずに残しています） */
+.cltools__searches { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cltools__search {
+  min-height: var(--tap);
+  width: 100%;
+  font-size: 28px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #0e1524;
+  color: #e8eefc;
+}
+
+/* 見出しと並べたボタンを、行をまたいでも同じ位置に揃えるため
+   flex ではなく grid で列を決め打ちします。
+   （flex-wrap だと、文字数の違いで折り返し位置がずれます） */
+.cltools__row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.cltools__row--c4 { grid-template-columns: 108px repeat(4, 1fr); }
+.cltools__row--c5 { grid-template-columns: 108px repeat(5, 1fr); }
+.cltools__row--c6 { grid-template-columns: 108px repeat(6, 1fr); }
+
+.cltools__label { font-size: 24px; color: #93a7c6; text-align: left; }
+.cltools__chip {
+  min-height: var(--tap-dense);
+  font-size: 24px;
+  padding: 12px 4px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: #1a2338;
+  color: #cfe0ff;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cltools__chip.is-on { border-color: #8fc0ff; background: #2f4a7a; color: #fff; font-weight: bold; }
+.cltools__chip--clear { border-color: #6a5330; background: #2a2114; color: #ffd9a0; }
+
+/* カードの拡大詳細（仕様書 16.3） */
+#card-detail {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 182;
+  padding: 40px;
+}
+#card-detail.is-open { display: flex; }
+.cdetail { width: 100%; max-width: 880px; max-height: 100%; overflow-y: auto; text-align: center; }
+.cdetail__img { width: 62%; max-width: 520px; border-radius: 14px; display: block; margin: 0 auto; }
+.cdetail__body { width: 100%; }
+.cdetail__name { margin-top: 26px; font-size: 40px; font-weight: bold; color: #eef4ff; }
+.cdetail__info {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 22px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: rgba(19, 27, 44, 0.7);
+  text-align: left;
+}
+.cdetail__key { font-size: 25px; color: #93a7c6; white-space: nowrap; }
+.cdetail__val { font-size: 25px; color: #e8eefc; }
+.cdetail__effect {
+  display: none;
+  margin-top: 18px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: rgba(19, 27, 44, 0.7);
+  font-size: 25px;
+  line-height: 1.6;
+  color: #e8eefc;
+  text-align: left;
+  white-space: pre-wrap;
+}
+.cdetail__effect.is-on { display: block; }
+.cdetail__close {
+  min-height: var(--tap);
+  margin-top: 28px;
+  font-size: 32px;
+  padding: 20px 60px;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+
+/* =====================================================================
+   スタート画面とメニュー階層（v0.4・仕様書 5〜8）
+   ===================================================================== */
+.menu--start {
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+.start__logo {
+  font-size: 92px;
+  font-weight: bold;
+  letter-spacing: 0.16em;
+  color: #eef4ff;
+  text-shadow: 0 0 30px rgba(120, 170, 255, 0.35);
+}
+.start__version { margin-top: 22px; font-size: 30px; color: #93a7c6; letter-spacing: 0.08em; }
+.start__tap {
+  margin-top: 96px;
+  font-size: 34px;
+  color: #cfe0ff;
+  letter-spacing: 0.1em;
+  animation: start-blink 2.4s ease-in-out infinite;
+}
+/* 押されたあとの切り替え演出（1.6秒・v0.4.4で作り直し）
+   ---------------------------------------------------------------------
+   前の版はガクついて、はみ出した分がスクロールできてしまいました。
+   原因は2つあります。
+
+     1. filter: blur を animation で animate すると、
+        毎コマ画面をぼかし直すことになり、とても重い
+        → 滲みは「透明度＋薄い影」で表し、blur は使いません
+
+     2. transform で大きくした分は、スクロールできる範囲として数えられる
+        → 入れ物の側で overflow: hidden にして、はみ出しを切ります
+   ------------------------------------------------------------------ */
+/* ★.menu と同じ強さだと、後に書いたほうが勝つ不安定な状態になります。
+   確実に上書きするため、セレクタを1段強くしています。 */
+#start-screen { overflow: hidden; }
+.menu.menu--start { overflow: hidden; }
+
+/* 押されたあとの流れ（v0.4.6 で作り直し）
+   ---------------------------------------------------------------------
+     ふだん  … タイトルはうっすら光っている
+     0.00s   … 押した瞬間、光が強く弾ける
+     0.15s   … 光がすっと弱まる
+     0.55s   … 文字が滲みながら広がって消える
+     0.95s   … 画面が黒く沈む
+     1.50s   … 黒からモード選択が浮かび上がる
+
+   ★なめらかに見せるための決めごと
+     光の強さや滲み具合そのものは動かしません。
+     「強く光った文字」「ぼかした文字」をあらかじめ重ねておき、
+     その濃さ（opacity）と大きさ（transform）だけを動かします。
+     この2つは描き直しを伴わないので、途中で引っかかりません。
+
+     v0.4.5 までは blur や text-shadow の値そのものを動かしていました。
+     これらは毎コマ画面を描き直すので、どうしても引っかかります。
+   ------------------------------------------------------------------ */
+.start__logo {
+  position: relative;
+  will-change: transform;
+}
+
+/* 実際に読める文字。ふだんから、うっすら光っています */
+.start__logo-text {
+  position: relative;
+  display: block;
+  text-shadow: 0 0 20px rgba(178, 218, 255, 0.4);
+  will-change: opacity;
+}
+
+/* 重ねておく2枚の写し。どちらもふだんは見えません */
+.start__logo::before,
+.start__logo::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+/* 1枚目：強く光った文字（弾ける光に使う） */
+.start__logo::before {
+  color: #f4fbff;
+  text-shadow:
+    0 0 18px rgba(214, 240, 255, 0.95),
+    0 0 46px rgba(150, 205, 255, 0.85),
+    0 0 96px rgba(110, 175, 255, 0.6);
+}
+/* 2枚目：ぼかした文字（滲みに使う）。ぼかしの値は変えません */
+.start__logo::after {
+  color: #dcefff;
+  filter: blur(15px);
+}
+
+.menu--start.is-leaving .start__logo { animation: logo-swell 1.5s cubic-bezier(0.3, 0, 0.3, 1) forwards; }
+.menu--start.is-leaving .start__logo-text { animation: logo-text-out 1.5s ease-in forwards; }
+.menu--start.is-leaving .start__logo::before { animation: logo-flash 1.5s ease-out forwards; }
+.menu--start.is-leaving .start__logo::after { animation: logo-haze 1.5s ease-out forwards; }
+
+.menu--start.is-leaving .start__tap,
+.menu--start.is-leaving .start__version {
+  animation: start-dissolve 0.7s ease-in forwards;
+}
+
+/* 全体はゆっくり広がるだけ。透明度はここでは触りません
+   （親を薄くすると、重ねた写しまで一緒に薄くなってしまうため） */
+@keyframes logo-swell {
+  0%   { transform: scale(1); }
+  10%  { transform: scale(1.05); }
+  100% { transform: scale(1.34); }
+}
+
+/* 読める文字は、光が弱まったあとに消えていきます */
+@keyframes logo-text-out {
+  0%   { opacity: 1; }
+  30%  { opacity: 1; }
+  62%  { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* 押した瞬間に強く光り、すっと弱まります */
+@keyframes logo-flash {
+  0%   { opacity: 0;    transform: scale(1); }
+  7%   { opacity: 1;    transform: scale(1.02); }
+  26%  { opacity: 0.22; transform: scale(1.01); }
+  55%  { opacity: 0.1;  transform: scale(1); }
+  100% { opacity: 0;    transform: scale(1); }
+}
+
+/* 光が弱まったころから滲みが濃くなり、広がって消えます */
+@keyframes logo-haze {
+  0%   { opacity: 0;    transform: scale(1); }
+  25%  { opacity: 0.15; transform: scale(1.02); }
+  55%  { opacity: 0.9;  transform: scale(1.1); }
+  100% { opacity: 0;    transform: scale(1.4); }
+}
+
+@keyframes start-dissolve {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+
+/* 文字が消えたあと、画面全体を黒へ沈める */
+.menu--start.is-leaving::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #05070c;
+  opacity: 0;
+  pointer-events: none;
+  animation: start-blackout 1.5s ease-in forwards;
+}
+@keyframes start-blackout {
+  0%   { opacity: 0; }
+  60%  { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* 黒から、次の画面が浮かび上がる */
+.menu.is-arriving {
+  animation: screen-rise 0.55s ease-out forwards;
+}
+@keyframes screen-rise {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu--start.is-leaving .start__logo,
+  .menu--start.is-leaving .start__logo-text,
+  .menu--start.is-leaving .start__logo::before,
+  .menu--start.is-leaving .start__logo::after,
+  .menu--start.is-leaving .start__version,
+  .menu--start.is-leaving .start__tap { animation: none; opacity: 0; }
+  .menu--start.is-leaving::after { animation: none; opacity: 1; }
+  .menu.is-arriving { animation: none; }
+}
+
+/* =====================================================================
+   画面切り替えの幕（v0.4.5）
+   ---------------------------------------------------------------------
+   進むときは左から右へ、戻るときは右から左へ黒が横切ります。
+   動かすのは transform だけなので、なめらかに走ります。
+   ===================================================================== */
+/* 幕は画面2枚ぶんの幅を持ち、両端がぼやけています。
+   真ん中の半分（＝画面1枚ぶん）が真っ黒なので、
+   ちょうど重なった位置で画面が完全に隠れます。
+
+     |--ぼかし--|------真っ黒------|--ぼかし--|
+        0〜25%        25〜75%        75〜100%
+
+   端をぼかしているので、暗くなるときも明るくなるときも、
+   線ではなく影が寄せてくるように見えます。 */
+#screen-wipe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 200%;
+  height: 100%;
+  z-index: 181;            /* メニュー(180)の上、拡大詳細(182)の下 */
+  background: linear-gradient(to right,
+    rgba(5, 7, 12, 0) 0%,
+    rgba(5, 7, 12, 0.55) 12%,
+    #05070c 25%,
+    #05070c 75%,
+    rgba(5, 7, 12, 0.55) 88%,
+    rgba(5, 7, 12, 0) 100%);
+  display: none;
+  pointer-events: none;
+  will-change: transform;
+  transform: translateX(-125%);
+}
+#screen-wipe.is-on { display: block; }
+
+/* 覆いに来る動き（速く） */
+#screen-wipe.is-forward { animation: wipe-in-right 0.11s ease-out forwards; }
+#screen-wipe.is-back    { animation: wipe-in-left  0.11s ease-out forwards; }
+/* 同じ向きに抜けていく動き */
+#screen-wipe.is-forward.is-out { animation: wipe-out-right 0.11s ease-in forwards; }
+#screen-wipe.is-back.is-out    { animation: wipe-out-left  0.11s ease-in forwards; }
+
+/* translateX(-25%) が「真っ黒な部分がちょうど画面に重なる」位置です */
+@keyframes wipe-in-right  { from { transform: translateX(-125%); } to { transform: translateX(-25%); } }
+@keyframes wipe-out-right { from { transform: translateX(-25%); } to { transform: translateX(75%); } }
+@keyframes wipe-in-left   { from { transform: translateX(75%); }  to { transform: translateX(-25%); } }
+@keyframes wipe-out-left  { from { transform: translateX(-25%); } to { transform: translateX(-125%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #screen-wipe { animation: none !important; }
+}
+
+@keyframes start-blink {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .start__tap { animation: none; opacity: 0.85; }
+}
+
+/* 設定など、端に固定して置くボタン（仕様書 6.1） */
+.menu__corner {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  position: absolute;
+  top: 34px;
+  left: 34px;
+  font-size: 26px;
+  padding: 14px 26px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #1a2338;
+  color: #cfe0ff;
+  cursor: pointer;
+  z-index: 1;          /* 画面の中身より前に置く */
+}
+/* モード選択以外では出しません（v0.5.6） */
+.menu__corner.is-hidden { display: none; }
+
+/* まだ作っていない項目 */
+.menu__card--soon { opacity: 0.45; }
+.menu__leaf { margin-right: 10px; }
+
+/* =====================================================================
+   対戦中メニュー・エラー画面・読み込み（v0.3・仕様書 21・29・30）
+   ===================================================================== */
+#game-menu {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.86);
+  z-index: 174;
+}
+#game-menu.is-on { display: flex; }
+
+.gmenu { width: 100%; max-width: 640px; padding: 0 40px; text-align: center; }
+.gmenu__title {
+  font-size: 48px;
+  font-weight: bold;
+  color: #eef4ff;
+  margin-bottom: 44px;
+  letter-spacing: 0.1em;
+}
+.gmenu__btn {
+  min-height: var(--tap);
+  display: block;
+  width: 100%;
+  margin-top: 22px;
+  font-size: 38px;
+  padding: 28px 10px;
+  border-radius: 16px;
+  border: 3px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.gmenu__btn--primary { border-color: #8fc0ff; background: #2f4a7a; font-weight: bold; }
+.gmenu__btn--warn { border-color: #b4545a; background: #3a1f28; color: #ffd8d8; }
+
+/* --- エラー画面（仕様書 29） --- */
+#error-screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 6, 10, 0.96);
+  z-index: 190;      /* いちばん上。何が起きても隠れないように */
+}
+#error-screen.is-on { display: flex; }
+
+.error {
+  width: 100%;
+  max-width: 860px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 0 34px;
+  text-align: left;
+}
+.error__title { font-size: 42px; font-weight: bold; color: #ffd8d8; }
+.error__lead { margin-top: 14px; font-size: 28px; line-height: 1.6; color: #e2c9c9; }
+.error__detail {
+  margin-top: 28px;
+  padding: 22px 24px;
+  border-radius: 12px;
+  border: 2px solid #6a3f48;
+  background: #1b1218;
+  font-size: 22px;
+  line-height: 1.6;
+  color: #f0dede;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 560px;
+  overflow-y: auto;
+}
+.error__fallback {
+  display: none;
+  margin-top: 18px;
+  width: 100%;
+  font-size: 22px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 3px solid #b4545a;
+  background: #14090d;
+  color: #f0dede;
+  resize: vertical;
+}
+.error__fallback.is-on { display: block; }
+.error__buttons { margin-top: 30px; display: flex; flex-direction: column; gap: 18px; }
+.error__btn {
+  min-height: var(--tap);
+  width: 100%;
+  font-size: 34px;
+  padding: 24px 10px;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.error__btn--primary { border-color: #d08b93; background: #4a2a33; color: #ffe6e6; font-weight: bold; }
+
+/* --- 読み込み中（仕様書 30） --- */
+#loading {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 186;
+}
+#loading.is-on { display: flex; }
+.loading__box { width: 100%; max-width: 640px; padding: 0 40px; text-align: center; }
+.loading__text { font-size: 38px; color: #dce9ff; letter-spacing: 0.08em; }
+.loading__bar {
+  margin-top: 26px;
+  height: 20px;
+  border-radius: 999px;
+  background: #1a2338;
+  border: 2px solid #3d5378;
+  overflow: hidden;
+}
+.loading__fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4f7cc0, #8fc0ff);
+  transition: width 0.15s ease;
+}
+.loading__count { margin-top: 16px; font-size: 26px; color: #93a7c6; }
+
+/* =====================================================================
+   リザルトの追加分（v0.3・仕様書 25〜26）
+   ===================================================================== */
+.result__info {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px 24px;
+  padding: 24px 26px;
+  border-radius: 14px;
+  border: 2px solid #2b374f;
+  background: rgba(19, 27, 44, 0.6);
+  text-align: left;
+}
+.result__ikey { font-size: 26px; color: #93a7c6; white-space: nowrap; }
+.result__ival { font-size: 26px; color: #e8eefc; word-break: break-all; }
+
+.result__notice {
+  display: none;
+  margin-top: 20px;
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 2px solid #46708f;
+  background: #12232c;
+  font-size: 24px;
+  line-height: 1.5;
+  color: #bfe4f5;
+  text-align: left;
+}
+.result__notice.is-on { display: block; }
+
+.result__fallback {
+  display: none;
+  margin-top: 22px;
+  width: 100%;
+  font-size: 24px;
+  line-height: 1.6;
+  padding: 18px;
+  border-radius: 12px;
+  border: 3px solid #8fc0ff;
+  background: #0e1524;
+  color: #e8eefc;
+  resize: vertical;
+}
+.result__fallback.is-on { display: block; }
+
+/* =====================================================================
+   遊び方（仕様書 18）
+   ---------------------------------------------------------------------
+   4つのまとまりを折りたたみで出します。<details> を使っているので、
+   見出しを押すだけで開け閉めできます。
+   ===================================================================== */
+.howto { text-align: left; }
+
+.howto__sec {
+  margin-top: 22px;
+  border-radius: 14px;
+  border: 2px solid #2b374f;
+  background: rgba(19, 27, 44, 0.6);
+  overflow: hidden;
+}
+.howto__head {
+  min-height: var(--tap);
+  padding: 26px 26px;
+  font-size: 36px;
+  font-weight: bold;
+  color: #eef4ff;
+  cursor: pointer;
+  list-style: none;
+}
+.howto__head::-webkit-details-marker { display: none; }
+.howto__head::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 16px;
+  font-size: 26px;
+  color: #7f9ac4;
+  transition: transform 0.15s ease;
+}
+.howto__sec[open] .howto__head::before { transform: rotate(90deg); }
+
+.howto__item {
+  padding: 0 26px 26px;
+}
+.howto__term {
+  font-size: 30px;
+  font-weight: bold;
+  color: #a8c8f5;
+  margin-bottom: 8px;
+}
+.howto__desc {
+  font-size: 26px;
+  line-height: 1.75;
+  color: #cfe0ff;
+  white-space: pre-wrap;   /* 説明文の改行をそのまま活かす */
+}
+
+/* =====================================================================
+   CPU観戦の操作バー（仕様書 20.4）
+   ---------------------------------------------------------------------
+   盤面の上、ターン終了ボタンより上に浮かせます。
+   観戦中だけ出るので、ふだんの対戦の邪魔にはなりません。
+   ===================================================================== */
+#watch-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 22px;
+  border-radius: 999px;
+  border: 3px solid #46597e;
+  background: rgba(10, 16, 28, 0.94);
+  z-index: 160;
+  white-space: nowrap;
+}
+#watch-bar.is-on { display: flex; }
+
+.watch-bar__btn {
+  min-height: var(--tap);
+  font-size: 30px;
+  padding: 16px 28px;
+  border-radius: 999px;
+  border: 3px solid #8fc0ff;
+  background: #2f4a7a;
+  color: #eef4ff;
+  cursor: pointer;
+}
+.watch-bar__btn--quit {
+  border-color: #b4545a;
+  background: #3a1f28;
+  color: #ffd8d8;
+}
+
+.watch-bar__speeds { display: flex; gap: 10px; }
+.watch-bar__speed {
+  min-height: var(--tap);
+  font-size: 26px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: 3px solid var(--line);
+  background: #141c2e;
+  color: #cfe0ff;
+  cursor: pointer;
+}
+.watch-bar__speed.is-on {
+  background: #2f4a7a;
+  border-color: #8fc0ff;
+  font-weight: bold;
+}
+
+/* 設定画面の「CPU 1」「CPU 2」のまとまり */
+.menu__group {
+  margin-top: 46px;
+  padding: 24px 22px 30px;
+  border-radius: 14px;
+  border: 2px solid #2b374f;
+  background: rgba(19, 27, 44, 0.6);
+}
+.menu__group-title {
+  font-size: 36px;
+  font-weight: bold;
+  color: #eef4ff;
+  letter-spacing: 0.06em;
+}
+.menu__group .menu__section { margin-top: 26px; }
+
+#watch-seed-input {
+  margin-top: 18px;
+  width: 100%;
+  font-size: 34px;
+  padding: 20px 18px;
+  border-radius: 12px;
+  border: 3px solid var(--line);
+  background: #0e1524;
+  color: #e8eefc;
+  text-align: center;
+}
+#watch-seed-input:disabled, #seed-input:disabled { opacity: 0.4; }
+
+/* =====================================================================
+   CPUのターン（v0.3）
+   ---------------------------------------------------------------------
+   ・cpu-thinking … 「CPU思考中…」の帯
+   ・cpu-reveal   … CPUが使うカードの一時公開。
+                    CPUの手札は裏向きのままなので、使う瞬間だけ
+                    ここで内容を見せます（仕様書 14.3）
+   ===================================================================== */
+#cpu-thinking {
+  position: absolute;
+  left: 50%;
+  top: 890px;
+  transform: translate(-50%, -50%);
+  padding: 22px 54px;
+  border-radius: 999px;
+  border: 3px solid #6f9ad8;
+  background: rgba(12, 20, 36, 0.92);
+  color: #dce9ff;
+  font-size: 38px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 149;
+}
+#cpu-thinking.is-on { opacity: 1; }
+
+#cpu-reveal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 152;
+}
+#cpu-reveal.is-on { opacity: 1; }
+
+.cpu-reveal__box {
+  text-align: center;
+  transform: scale(0.9);
+  transition: transform 0.18s ease;
+}
+#cpu-reveal.is-on .cpu-reveal__box { transform: scale(1); }
+
+.cpu-reveal__card {
+  width: 300px;
+  height: 419px;
+  margin: 0 auto;
+  border-radius: 16px;
+  background-color: #0e1524;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 46px rgba(120, 180, 255, 0.55), 0 18px 40px rgba(0, 0, 0, 0.6);
+}
+.cpu-reveal__name {
+  margin-top: 22px;
+  font-size: 40px;
+  font-weight: bold;
+  color: #eef4ff;
+  text-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+}
+
+/* =====================================================================
+   メニュー画面（タイトル・モード選択・各設定・設定）
+   ---------------------------------------------------------------------
+   #start-screen は「メニューを置く土台」です。
+   その中の .menu が1画面ぶんで、is-open の付いた1枚だけが出ます。
+   ===================================================================== */
+#start-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 180;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+}
+#start-screen.is-open { display: flex; }
+
+.menu {
+  display: none;
+  width: 100%;
+  max-width: 860px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 0 30px;
+  text-align: center;
+}
+.menu.is-open { display: block; }
+
+/* --- タイトル画面のロゴ --- */
+.menu__logo {
+  font-size: 104px;
+  font-weight: bold;
+  letter-spacing: 0.14em;
+  color: #eef4ff;
+  text-shadow: 0 0 34px rgba(150, 200, 255, 0.55);
+}
+.menu__version {
+  margin-top: 6px;
+  font-size: 32px;
+  letter-spacing: 0.2em;
+  color: #9fb0cc;
+}
+
+/* --- 各画面の見出し --- */
+.menu__title {
+  font-size: 56px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  color: #eef4ff;
+  margin-bottom: 16px;
+}
+
+.menu__body { text-align: left; }
+
+/* --- 縦に並ぶボタン（タイトル・モード選択） --- */
+.menu__list {
+  margin-top: 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.menu__btn {
+  min-height: var(--tap);
+  width: 100%;
+  font-size: 44px;
+  padding: 30px 10px;
+  border-radius: 16px;
+  border: 3px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.menu__btn--primary {
+  border-color: #8fc0ff;
+  background: #2f4a7a;
+  color: #eef4ff;
+  font-weight: bold;
+}
+
+/* --- モード選択の大きなカード --- */
+.menu__card {
+  width: 100%;
+  display: block;
+  text-align: left;
+  padding: 30px 34px;
+  border-radius: 18px;
+  border: 3px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.menu__card-name {
+  display: block;
+  font-size: 44px;
+  font-weight: bold;
+  color: #eef4ff;
+}
+.menu__card-desc {
+  display: block;
+  margin-top: 10px;
+  font-size: 26px;
+  line-height: 1.5;
+  color: #9fb0cc;
+}
+.menu__tag {
+  display: inline-block;
+  margin-left: 16px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 2px solid #6f83a8;
+  font-size: 22px;
+  font-weight: normal;
+  color: #9fb0cc;
+  vertical-align: middle;
+}
+
+/* クリア済みの印（チュートリアル選択画面・v0.5 仕様書 19.2）。
+   「解放されていない」を表す灰色の札と区別できるよう、金色にします。 */
+.menu__tag--clear {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.menu__tag--clear.is-hidden { display: none; }
+
+/* --- 設定画面の中身 --- */
+.menu__section { margin-top: 50px; }
+.menu__label { font-size: 32px; color: #cfe0ff; }
+.menu__hint { margin-top: 12px; font-size: 24px; color: #9fb0cc; }
+
+.menu__choices {
+  margin-top: 18px;
+  display: flex;
+  gap: 22px;
+  justify-content: center;
+}
+.menu__choice {
+  min-height: var(--tap);
+  flex: 1 1 0;
+  font-size: 38px;
+  padding: 26px 10px;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.menu__choice.is-on {
+  background: #2f4a7a;
+  border-color: #8fc0ff;
+  font-weight: bold;
+}
+
+/* 難易度の5つは「弱・中・強」「エキスパート・理不尽」の2行に分ける。
+   6列の升目を用意し、上の3つは2列ぶん・下の2つは3列ぶんを使うことで、
+   どちらの行も端から端までぴったり収まります。 */
+.menu__choices--diff {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 22px;
+}
+.menu__choices--diff > :nth-child(-n+3) { grid-column: span 2; }  /* 弱・中・強 */
+.menu__choices--diff > :nth-child(n+4)  { grid-column: span 3; }  /* エキスパート・理不尽 */
+
+.menu__choice--small {
+  min-width: 0;
+  font-size: 30px;
+  padding: 20px 12px;
+  white-space: nowrap;
+}
+
+/* 難易度の説明文 */
+.menu__desc {
+  margin-top: 18px;
+  padding: 20px 22px;
+  border-radius: 12px;
+  background: #131b2c;
+  border: 2px solid #2b374f;
+  font-size: 26px;
+  line-height: 1.6;
+  color: #cfe0ff;
+  min-height: 1.6em;
+}
+
+/* 入力エラーの表示（仕様書 12.3） */
+.menu__error {
+  display: none;
+  margin-top: 40px;
+  padding: 20px 22px;
+  border-radius: 12px;
+  border: 3px solid #b4545a;
+  background: #2a1620;
+  font-size: 28px;
+  line-height: 1.6;
+  color: #ffc8c8;
+  text-align: center;
+}
+.menu__error.is-on { display: block; }
+
+#seed-input, #cpu-seed-input {
+  margin-top: 18px;
+  width: 100%;
+  font-size: 34px;
+  padding: 20px 18px;
+  border-radius: 12px;
+  border: 3px solid var(--line);
+  background: #0e1524;
+  color: #e8eefc;
+  text-align: center;
+}
+#cpu-seed-input:disabled { opacity: 0.4; }
+
+/* --- 設定画面の幅いっぱいのボタン --- */
+.menu__wide {
+  min-height: var(--tap);
+  margin-top: 18px;
+  width: 100%;
+  font-size: 32px;
+  padding: 24px 10px;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  background: #1a2338;
+  color: #e8eefc;
+  cursor: pointer;
+}
+.menu__wide--warn { border-color: #8a5560; color: #ffd8d8; }
+
+/* --- 音量スライダー --- */
+#se-volume {
+  margin-top: 20px;
+  width: 100%;
+  height: 46px;
+  accent-color: #8fc0ff;
+}
+
+/* --- 「保存しました」などの控えめな知らせ --- */
+.menu__done {
+  margin-top: 40px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 2px solid #46708f;
+  background: #12232c;
+  font-size: 26px;
+  color: #bfe4f5;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.menu__done.is-on { opacity: 1; }
+
+/* --- 画面の冒頭に置く短い説明 --- */
+.menu__note {
+  margin-top: 10px;
+  padding: 22px 24px;
+  border-radius: 12px;
+  background: #131b2c;
+  border: 2px solid #2b374f;
+  font-size: 26px;
+  line-height: 1.6;
+  color: #cfe0ff;
+  text-align: left;
+}
+
+/* --- これから作る場所の案内（Stage B以降で消えます） --- */
+.menu__todo {
+  margin-top: 50px;
+  padding: 40px 30px;
+  border: 3px dashed #47597e;
+  border-radius: 16px;
+  font-size: 28px;
+  line-height: 1.7;
+  color: #9fb0cc;
+  text-align: center;
+}
+.menu__todo--small {
+  margin-top: 46px;
+  padding: 24px 20px;
+  font-size: 24px;
+}
+
+/* --- 画面下のボタン --- */
+.menu__foot {
+  margin-top: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.menu__go {
+  min-height: var(--tap);
+  width: 100%;
+  font-size: 44px;
+  font-weight: bold;
+  padding: 30px 10px;
+  border-radius: 16px;
+  border: 3px solid #8fc0ff;
+  background: #2f4a7a;
+  color: #eef4ff;
+  cursor: pointer;
+}
+.menu__go:disabled { opacity: 0.5; cursor: default; }
+.menu__back {
+  min-height: var(--tap);
+  width: 100%;
+  font-size: 34px;
+  padding: 22px 10px;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  background: #141c2e;
+  color: #cfe0ff;
+  cursor: pointer;
+}
+
+/* =====================================================================
+   カードを選ぶ画面（効果でトラッシュや手札から選ぶとき）
+   ===================================================================== */
+#picker {
+  position: absolute;
+  inset: 0;
+  z-index: 158;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  padding: 40px;
+}
+#picker.is-open { display: flex; }
+
+.pick {
+  width: 100%;
+  max-width: 960px;
+  max-height: 100%;
+  background: #121a2c;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+}
+.pick__title { font-size: 48px; font-weight: bold; text-align: center; }
+.pick__message {
+  margin-top: 10px;
+  font-size: 30px;
+  color: #d8e2f4;
+  text-align: center;
+}
+.pick__grid {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 6px;
+}
+.pick__card {
+  width: 160px;
+  aspect-ratio: 63 / 88;
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  position: relative;
+  cursor: pointer;
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55));
+}
+/* 選べるカードは少し光らせ、選べないカードは暗くする */
+.pick__card.is-selectable {
+  box-shadow: 0 0 0 3px rgba(150, 220, 255, 0.75),
+              0 0 20px 5px rgba(120, 195, 255, 0.45);
+}
+.pick__card.is-locked {
+  filter: brightness(0.42) saturate(0.6);
+  cursor: default;
+}
+
+.pick__card.is-picked {
+  outline: 5px solid #ffd36b;
+  outline-offset: 3px;
+  filter: drop-shadow(0 0 16px rgba(255, 211, 107, 0.9));
+}
+.pick__order {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffd36b;
+  color: #1a1f2e;
+  font-size: 26px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pick__buttons {
+  margin-top: 22px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+/* 盤面のカードを選ぶときの案内バー */
+#target-hint {
+  position: absolute;
+  left: 50%;
+  top: 620px;
+  transform: translateX(-50%);
+  z-index: 147;
+  display: none;
+  padding: 16px 34px;
+  font-size: 34px;
+  font-weight: bold;
+  color: #1a1f2e;
+  background: #ffd36b;
+  border-radius: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#target-hint.is-open { display: block; }
+
+/* 効果の対象として選べるカード */
+.card.is-target {
+  outline: 5px solid #ffd36b;
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+/* =====================================================================
+   案内・確認ダイアログ
+   ボタンは 左＝戻る／右＝進む の並びで統一します（v0.1からの約束）
+   ===================================================================== */
+#dialog {
+  position: absolute;
+  inset: 0;
+  /* メニュー階層（#start-screen は 180）より上に出します。
+     ここが下だと、デッキ一覧などの確認ダイアログが
+     画面の裏に隠れて押せなくなります（v0.4 Stage D の不具合）。 */
+  z-index: 184;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 40px;
+}
+#dialog.is-open { display: flex; }
+
+.dlg {
+  width: 100%;
+  max-width: 860px;
+  background: #121a2c;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  padding: 34px 36px;
+  text-align: center;
+}
+.dlg__title { font-size: 54px; font-weight: bold; }
+.dlg__message {
+  margin-top: 18px;
+  font-size: 34px;
+  line-height: 1.5;
+  color: #d8e2f4;
+  white-space: pre-wrap;
+}
+.dlg__buttons {
+  margin-top: 30px;
+  display: flex;
+  gap: 22px;
+  justify-content: center;
+}
+.dlg__btn {
+  min-height: var(--tap);
+  min-width: 240px;
+  padding: 18px 30px;
+  font-size: 34px;
+  font-weight: bold;
+  color: var(--text);
+  background: #26314e;
+  border: 2px solid #9fb0cf;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.dlg__btn--primary { background: #2f4a7a; border-color: #ffd36b; }
+
+/* マリガンで交換に選んだ手札 */
+.fan-card.is-mulligan {
+  filter: drop-shadow(0 0 18px rgba(120, 200, 255, 0.95)) brightness(0.75);
+}
+
+/* 画面中央の大きな文字（「追跡」「襲撃」：仕様書 20・21.4） */
+#banner {
+  position: absolute;
+  inset: 0;
+  z-index: 146;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+#banner.is-open { display: flex; }
+#banner span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.06;
+  white-space: nowrap;      /* 中途半端な位置で折り返さない */
+  text-align: center;
+  font-size: 190px;
+  font-weight: bold;
+  letter-spacing: 0.12em;
+  color: #eaf3ff;
+  text-shadow: 0 0 30px rgba(0, 0, 0, 0.9), 0 8px 20px rgba(0, 0, 0, 0.8);
+  animation: banner-in 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+#banner.is-attack span { color: var(--pursuit-attack-color); }
+@keyframes banner-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* 移動演出の層。
+   fly-layer     … 手札（z-index 50）より後ろ。フィールドカードよりは前。
+   fly-layer-top … 手札より前。手札から出ていく動きに使う。 */
+#fly-layer,
+#fly-layer-top {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#fly-layer { z-index: 45; }
+#fly-layer-top { z-index: 55; }
+
+/* 移動演出の「カード状の光」。山札表示のおよそ半分の大きさ。 */
+.fly-light {
+  position: absolute;
+  width: 88px;
+  aspect-ratio: 63 / 88;
+  border-radius: 10px;
+  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+  background: linear-gradient(155deg,
+              rgba(255, 255, 255, 0.95),
+              rgba(165, 220, 255, 0.72));
+  box-shadow: 0 0 18px 6px rgba(160, 215, 255, 0.75),
+              0 0 48px 16px rgba(110, 185, 255, 0.38);
+}
+
+/* イベントを使い終えてトラッシュへ置くときの、小さな光 */
+.fly-light--small {
+  width: 54px;
+  box-shadow: 0 0 12px 4px rgba(255, 200, 140, 0.7),
+              0 0 30px 10px rgba(255, 155, 90, 0.3);
+}
+
+/* トラッシュや山札へ戻る動きは暖色にして、増える動きと区別する */
+.fly-light--warm {
+  background: linear-gradient(155deg,
+              rgba(255, 244, 220, 0.95),
+              rgba(255, 194, 140, 0.78));
+  box-shadow: 0 0 18px 6px rgba(255, 200, 140, 0.7),
+              0 0 48px 16px rgba(255, 155, 90, 0.35);
+}
+
+/* 短いお知らせ（ドロップ失敗の理由など） */
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 470px;
+  transform: translateX(-50%);
+  /* メニュー階層（180）とダイアログ（184）より上。
+     ここが下だと、デッキ一覧などの短い知らせが画面の裏に隠れます。 */
+  z-index: 188;
+  padding: 16px 30px;
+  font-size: 32px;
+  color: #fff;
+  background: rgba(12, 16, 28, 0.94);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+#toast.is-open { opacity: 1; }
+
+/* =====================================================================
+   クイック詳細（仕様書 16.1）
+   画面左上に重ねて表示。盤面は押し下げない。
+   ===================================================================== */
+#quick-detail {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  width: 700px;          /* スマホで読めるよう大きめに取る */
+  z-index: 60;
+  display: none;
+}
+#quick-detail.is-open { display: block; }
+
+.qd {
+  background: rgba(8, 11, 20, 0.95);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  /* 効果文が長いカードでも自分の盤面へ届かないよう、高さに上限を設ける。
+     上限に達したら、この枠の中だけを送って読む。
+     （上限515px＝相手の山札の枚数表示に掛からない高さ） */
+  max-height: 515px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;    /* 画面はスクロールしないが、この枠だけは送れる */
+}
+.qd__name { font-size: 52px; font-weight: bold; line-height: 1.2; }
+.qd__meta { margin-top: 8px; font-size: 30px; color: #9fb0cf; }
+.qd__stats { display: flex; gap: 30px; margin-top: 12px; align-items: baseline; }
+.qd__stat { font-size: 28px; color: #9fb0cf; }
+.qd__stat b { font-size: 44px; color: var(--text); margin-left: 6px; }
+.qd__stat.is-up b { color: #8ef5a0; }
+.qd__stat.is-down b { color: #ff9a9a; }
+.qd__cond,
+.zd__cond {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(120, 195, 255, 0.14);
+  border-left: 5px solid rgba(150, 220, 255, 0.85);
+  color: #dceaff;
+  white-space: pre-wrap;
+}
+.qd__cond.is-met,
+.zd__cond.is-met {
+  background: rgba(140, 235, 170, 0.16);
+  border-left-color: rgba(150, 240, 180, 0.9);
+  color: #dcffe6;
+}
+
+.qd__text {
+  margin-top: 12px;
+  font-size: 38px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #e6ebf6;
+}
+
+/* =====================================================================
+   拡大詳細（仕様書 16.2）
+   約0.5秒の長押しで開く。背景操作は止め、閉じるボタンでのみ戻る。
+   ===================================================================== */
+#zoom-detail {
+  position: absolute;
+  inset: 0;
+  z-index: 177;   /* 選択画面やダイアログの上に出す */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  padding: 40px;
+}
+#zoom-detail.is-open { display: flex; }
+
+.zd {
+  width: 100%;
+  max-width: 960px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.zd__card {
+  width: 640px;
+  aspect-ratio: 63 / 88;
+  /* カード画像は角が透明なので、下地の色を敷かない（白いふちが出るため） */
+  background-color: transparent;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.6));
+  flex: 0 1 auto;
+  min-height: 0;
+}
+.zd__card--landscape { width: 880px; aspect-ratio: 1039 / 744; }
+.zd__info {
+  width: 100%;
+  background: rgba(10, 14, 24, 0.96);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 24px;
+  /* 効果文が長いカードでも収まるように、この枠の中だけで送る */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  flex: 0 1 auto;
+}
+.zd__name { font-size: 54px; font-weight: bold; }
+.zd__meta { margin-top: 8px; font-size: 32px; color: #9fb0cf; }
+.zd__stats { display: flex; flex-wrap: wrap; gap: 12px 34px; margin-top: 16px; }
+.zd__stat { font-size: 30px; color: #9fb0cf; }
+.zd__stat b { font-size: 46px; color: var(--text); margin-left: 8px; }
+.zd__stat.is-up b { color: #8ef5a0; }
+.zd__stat.is-down b { color: #ff9a9a; }
+.zd__text {
+  margin-top: 16px;
+  font-size: 40px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: #e6ebf6;
+}
+.zd__close {
+  min-height: var(--tap);
+  padding: 18px 56px;
+  font-size: 36px;
+  flex: 0 0 auto;
+  font-weight: bold;
+  color: var(--text);
+  background: #26314e;
+  border: 2px solid var(--text-dim, #9fb0cf);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+#hand-fan {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1080px;
+  height: 700px;
+  z-index: 50;
+  pointer-events: none;
+}
+/* 拡大手札の出し入れ（v0.4.1 で演出を追加）
+   display:none で切り替えると一瞬で消えて、
+   どこへ行ったのか分からなくなります。
+   下へすべらせながら薄くして、位置のつながりを見せます。 */
+#hand-fan {
+  transition: transform 0.24s cubic-bezier(0.25, 0.9, 0.35, 1),
+              opacity 0.2s ease;
+}
+#hand-fan.is-hidden {
+  transform: translateY(210px);
+  opacity: 0;
+  pointer-events: none;
+}
+/* 隠れているあいだは、カードにも触れないようにする
+   （.fan-card 側で pointer-events: auto を指定しているため） */
+#hand-fan.is-hidden .fan-card { pointer-events: none; }
+
+/* 簡略手札は、入れ替わりで薄く出入りさせる */
+.hand-mini--self { transition: opacity 0.2s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  #hand-fan, .hand-mini--self { transition: none; }
+}
+
+.fan-card {
+  position: absolute;
+  left: calc(50% - 125px);
+  bottom: var(--fan-bottom);
+  width: 250px;
+  font-size: 250px;
+  transform-origin: 50% 100%;   /* カードの下端を軸に少しだけ傾ける */
+  transition: transform 0.18s ease, filter 0.18s ease;
+  pointer-events: auto;
+}
+.fan-card.is-selected {
+  /* 重ね順は preview.js が最前面に設定する */
+  filter: drop-shadow(0 0 18px rgba(255, 211, 107, 0.9));
+}
+/* いま出せないカードは、選んでも光らせない（詳細は普通に見られる） */
+.fan-card.is-selected.is-unplayable {
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55));
+}
+
+/* いま出せるカードは、うっすら光らせて呼吸させる（v0.3）
+   ・選んでいるカードの黄色い強調とは別の、青みがかった控えめな光
+   ・操作できない時間には preview.js がこの印を外すので、光りません */
+.fan-card.is-playable {
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55))
+          drop-shadow(0 0 10px rgba(140, 200, 255, 0.55));
+  animation: fan-breath 2.2s ease-in-out infinite;
+}
+/* 選んでいるあいだは、選択の強調（黄色）を優先する */
+.fan-card.is-playable.is-selected { animation: none; }
+
+@keyframes fan-breath {
+  0%, 100% { filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55))
+                     drop-shadow(0 0 8px rgba(140, 200, 255, 0.40)); }
+  50%      { filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.55))
+                     drop-shadow(0 0 18px rgba(140, 200, 255, 0.85)); }
+}
+
+/* 動きを減らす設定にしている端末では、点滅させず一定の光にする */
+@media (prefers-reduced-motion: reduce) {
+  .fan-card.is-playable { animation: none; }
+}
+
+/* =====================================================================
+   横向き警告
+   ===================================================================== */
+#orientation-warning {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #05060b;
+  color: var(--text);
+  font-size: 20px;
+}
+@media (orientation: landscape) and (pointer: coarse) {
+  #orientation-warning { display: flex; }
+}
+
+/* =====================================================================
+   調整パネル（開発用。配布版では screens.js の DEV_PANEL=false で隠しています）
+   ===================================================================== */
+#panel-toggle {
+  position: fixed;
+  right: 8px;
+  top: 8px;
+  z-index: 300;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(20, 24, 40, 0.9);
+  border: 1px solid #4a587a;
+  border-radius: 8px;
+}
+#panel {
+  position: fixed;
+  right: 8px;
+  top: 48px;
+  z-index: 300;
+  width: 268px;
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: rgba(12, 16, 28, 0.95);
+  border: 1px solid #4a587a;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #e8ecf6;
+}
+#panel.is-closed { display: none; }
+.panel__title { font-weight: bold; margin-bottom: 6px; }
+.panel__note { font-weight: normal; color: #8fa0c0; font-size: 11px; }
+.panel__group { margin-top: 10px; border-top: 1px solid #2b3552; padding-top: 8px; }
+.panel__head { color: #9fb0cf; margin-bottom: 4px; }
+#panel label { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+#panel input[type="range"] { flex: 1 1 auto; }
+#panel .v { min-width: 38px; text-align: right; color: var(--accent); }
+
+/* =====================================================================
+   チュートリアル（v0.5・仕様書 22）
+   ---------------------------------------------------------------------
+   【重ね順】
+     暗転 186 ＜ 操作案内 187 ＜ 説明 188 ＜ ヒント 189
+   ダイアログ(184)より上に置きます。説明が確認ダイアログに
+   隠れると、読めないまま操作できなくなるためです。
+
+   【動かすのは opacity と transform だけ】
+   filter や box-shadow を @keyframes で動かすと毎コマ描き直しになり、
+   端末で目に見えて重くなります（v0.4.6 で実測）。
+   発光は静的な影で表し、明滅は opacity だけで作ります。
+   ===================================================================== */
+
+/* ---- 暗転（仕様書 22.2／22.3） ----
+   説明中は 65%、操作中は 32% まで弱めます。
+   操作中に濃いままだと、盤面が読めず何をすべきか分かりません。 */
+/* ★案内は #stage の外に置いています（v0.9）。
+   v0.8 の対戦画面（#v7-root・z-index 1000）が #stage を覆うためです。
+   #stage は transform を持つので、中の z-index を上げても外へ出られません。
+
+   中身の寸法は 1080×1920 を前提に書かれているので、
+   #stage と同じ縮小率（--fit）を掛けた枠に入れ直します。 */
+#tut-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;            /* 対戦画面（1000）より手前 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* ★案内そのものは操作を邪魔しません。
+     受け取るのは、下の #tut-panel（説明中に画面を止める）だけです。 */
+  pointer-events: none;
+}
+/* ★中身の出し入れは、これまでどおり各要素の is-hidden がやります。
+   この層はいつも置いたままで構いません（操作を通すためです）。 */
+
+#tut-layer-fit {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  flex: 0 0 auto;
+  transform: scale(var(--fit, 0.3));
+  transform-origin: center center;
+}
+/* ★押せる必要があるものだけ、入力を受け取ります。
+   ほかは素通しにして、盤面の操作を邪魔しません。 */
+#tut-panel:not(.is-hidden),
+#tut-say:not(.is-hidden) { pointer-events: auto; }
+
+#tut-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 186;
+  background: #000;
+  opacity: 0.65;
+  pointer-events: none;    /* 暗幕自体は操作を邪魔しない */
+  transition: opacity 0.22s ease;
+}
+#tut-dim.is-action { opacity: 0.32; }
+#tut-dim.is-hidden { display: none; }
+
+/* ---- 中央のルール説明・結果説明（仕様書 22.1） ---- */
+#tut-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 188;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+#tut-panel.is-hidden { display: none; }
+
+.tut__box {
+  width: 100%;
+  max-width: 900px;
+  background: #101728;
+  border: 3px solid var(--accent);
+  border-radius: 20px;
+  padding: 38px 40px 32px;
+  animation: tut-rise 0.26s ease-out both;
+}
+
+/* 進捗（仕様書 22.7）。内部のステップ数は出さず、章だけを見せます */
+.tut__progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 28px;
+  color: #9fb0cf;
+  margin-bottom: 18px;
+}
+.tut__chapter { color: var(--accent); font-weight: bold; }
+/* 「3 / 8」のような章の進み具合。内部のステップ数ではありません */
+.tut__steps { font-variant-numeric: tabular-nums; }
+
+.tut__title {
+  font-size: 50px;
+  font-weight: bold;
+  line-height: 1.3;
+}
+.tut__text {
+  margin-top: 20px;
+  font-size: 34px;
+  line-height: 1.62;
+  color: #d8e2f4;
+  white-space: pre-wrap;
+}
+.tut__buttons {
+  margin-top: 32px;
+  display: flex;
+  gap: 22px;
+  justify-content: flex-end;
+}
+.tut__btn {
+  min-height: var(--tap);
+  min-width: 220px;
+  padding: 18px 30px;
+  font-size: 34px;
+  font-weight: bold;
+  color: var(--text);
+  background: #26314e;
+  border: 2px solid #9fb0cf;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.tut__btn--primary { background: #2f4a7a; border-color: var(--accent); }
+.tut__btn.is-hidden { display: none; }
+
+/* ---- 操作案内バー（仕様書 22.3） ----
+   ドラッグ経路を覆わないよう、画面のいちばん下に薄く置きます。 */
+#tut-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 187;
+  display: flex;
+  justify-content: center;
+  padding: 22px 40px 30px;
+  pointer-events: none;
+}
+#tut-guide.is-hidden { display: none; }
+
+.tut-guide__text {
+  display: inline-block;
+  max-width: 940px;
+  padding: 18px 34px;
+  font-size: 32px;
+  font-weight: bold;
+  line-height: 1.4;
+  text-align: center;
+  color: #0d1120;
+  background: var(--accent);
+  border-radius: 999px;
+  animation: tut-rise 0.24s ease-out both;
+}
+
+/* ---- 誤操作のヒント（仕様書 22.5） ----
+   1.8秒で消えます。盤面の中央より少し上に出して、
+   手札やボタンを隠さないようにしています。 */
+#tut-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34%;
+  z-index: 189;
+  display: flex;
+  justify-content: center;
+  padding: 0 46px;
+  pointer-events: none;
+}
+#tut-hint.is-hidden { display: none; }
+
+#tut-hint span {
+  display: inline-block;
+  max-width: 900px;
+  padding: 22px 34px;
+  font-size: 34px;
+  line-height: 1.45;
+  text-align: center;
+  color: #fff2cf;
+  background: rgba(28, 20, 8, 0.94);
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  animation: tut-hint-in 0.2s ease-out both;
+}
+
+/* ---- 操作してほしい場所の発光（仕様書 22.3） ----
+   静的な影で光らせ、明滅は opacity だけで作ります。 */
+.is-tut-target {
+  outline: 5px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+.is-tut-target::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 14px;
+  box-shadow: 0 0 26px 6px rgba(255, 211, 107, 0.85);
+  pointer-events: none;
+  animation: tut-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tut-rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tut-hint-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes tut-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+/* ---- 相手の行動の説明（v0.5.4・仕様書 20.4） ----
+   中央に大きく出すと、いま何が起きたのかが見えません。
+   下に寄せて、盤面を見ながら読めるようにします。 */
+#tut-say {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 188;
+  display: flex;
+  justify-content: center;
+  padding: 26px 32px 34px;
+}
+#tut-say.is-hidden { display: none; }
+
+.tut-say__box {
+  width: 100%;
+  max-width: 940px;
+  background: #101728;
+  border: 3px solid var(--accent);
+  border-radius: 18px;
+  padding: 24px 28px 22px;
+  animation: tut-rise 0.24s ease-out both;
+}
+.tut-say__label {
+  font-size: 26px;
+  font-weight: bold;
+  color: var(--accent);
+}
+.tut-say__text {
+  margin-top: 10px;
+  font-size: 32px;
+  line-height: 1.55;
+  color: #d8e2f4;
+  white-space: pre-wrap;
+}
+.tut-say__box .tut__btn {
+  margin-top: 18px;
+  margin-left: auto;
+  display: block;
+}
+
+/* ---- 実践編クリア後の案内（v0.6・仕様書 21.8） ---- */
+.tfin__lead {
+  font-size: 30px;
+  line-height: 1.6;
+  color: #d8e2f4;
+  margin-bottom: 22px;
+}
+.tfin__box {
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: rgba(19, 27, 44, 0.6);
+  padding: 16px 22px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+.tfin__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 26px;
+  padding: 7px 0;
+}
+.tfin__row + .tfin__row { border-top: 1px solid rgba(79, 106, 158, 0.35); }
+.tfin__row span { color: #93a7c6; }
+.tfin__row b { color: #dce9ff; }
+
+/* =====================================================================
+   ★グッズの下敷き表示（v0.6.7）
+   ---------------------------------------------------------------------
+   装備したグッズを、本体のカードの下に敷きます。
+   下へ少しずらして、グッズのカード名がのぞくようにします。
+   どのカードにグッズが付いているか、一目で分かるようにするためです。
+
+   ずらす量は、カードの幅に比例させています。
+   相手の盤面は小さく、自分の追跡カードは大きく表示されるので、
+   固定の値にすると、片方でははみ出しすぎ、片方では見えなくなります。
+
+   .card は font-size にカード幅が入っているので（現在値バッジ用）、
+   em で書くと自動的に幅に比例します。
+   ===================================================================== */
+.card-stack {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* 重ねる2枚は、同じ場所に置きます */
+.card-stack .card {
+  position: relative;
+}
+
+/* 下敷きのグッズ。
+   制作者からいただいた見本では、グッズの下側の文章欄が
+   まるごとのぞく大きさになっています。
+   カード全体の高さは幅の約1.4倍、のぞかせるのはその2割ほどです。 */
+.card-stack .card--equipped {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  z-index: 0;
+
+  /* ★ずらす量は、実際のカード画像を測って決めています（v0.6.9）。
+
+     グッズの文章欄には、装備の条件と効果文を分ける細い線があります。
+     その線は、カード上端から「幅の 1.137 倍」の位置にありました
+     （古いお札・黒い指輪・懐中電灯の3枚とも同じ）。
+
+     カードの高さは幅の 88/63 = 1.3968 倍なので、
+       1.3968 - 1.137 = 0.2598
+     だけ下げると、線がちょうど本体カードの底辺に重なります。
+
+     こうすると、装備の条件や追加されるスタッツは隠れ、
+     発揮される効果と、どのカードに付いているかだけが見えます。 */
+  top: 0.2598em;
+}
+
+/* 下敷きの数字や名前は出しません。
+   本体のカードに隠れて読めず、本体の数字と紛れるためです */
+.card-stack .card--equipped .ov-row { display: none; }
+.card-stack .card--equipped .card__label { display: none; }
+
+/* 本体のカードは、下敷きより手前に置きます */
+.card-stack .card--holder {
+  z-index: 1;
+}
+
+/* =====================================================================
+   v0.7 Stage 5：既存メニューの文字を読める大きさへ（第3部 3.3）
+   ---------------------------------------------------------------------
+   既存画面は #stage（1080×1920）を transform:scale(--fit) で縮めて
+   表示している。--fit は 320px 端末で約 0.296 なので、
+   1080基準で 26px と書いた文字は実機で 7.7px にしかならず、
+   仕様の下限（本文14 / ボタン15 / パネルタイトル16 / 画面タイトル18 /
+   補足12）を大きく割り込んでいた。
+
+   そこで #start-screen 配下（メニュー系）に限り、下限を満たす
+   1080基準値へ引き上げる。必要倍率は 320px 端末を基準に
+     本文    14 / 0.296 ≒ 47px
+     ボタン  15 / 0.296 ≒ 51px
+     タイトル18 / 0.296 ≒ 61px
+     補足    12 / 0.296 ≒ 41px
+   としている。
+
+   ★対戦盤面（#stage 直下のカード配置・ゾーン）には触れない。
+     セレクタを #start-screen 配下に限定しているため、
+     盤面・チュートリアル表示・結果画面には影響しない（第21部 21.3）。
+   ===================================================================== */
+
+/* --- 画面タイトル（下限18px相当＝61px以上） --- */
+#start-screen .menu__title      { font-size: 64px; }
+#start-screen .listbar__title   { font-size: 61px; }
+#start-screen .cdetail__name    { font-size: 61px; }
+#start-screen .dedetail__name   { font-size: 58px; }
+#start-screen .dedit__name      { font-size: 52px; }
+
+/* --- パネルタイトル・見出し（下限16px相当＝54px以上） --- */
+#start-screen .menu__group-title { font-size: 55px; }
+#start-screen .menu__card-name   { font-size: 56px; }
+#start-screen .cardlist__sep     { font-size: 48px; }
+
+/* --- ボタン文字（下限15px相当＝51px以上） --- */
+#start-screen .menu__go         { font-size: 55px; }
+#start-screen .menu__back       { font-size: 51px; }
+#start-screen .menu__choice     { font-size: 51px; }
+#start-screen .menu__choice--small { font-size: 48px; }
+#start-screen .listbar__back    { font-size: 48px; }
+#start-screen .dpick            { font-size: 48px; }
+#start-screen .dlfoot__add      { font-size: 51px; }
+#start-screen .dvfoot__btn      { font-size: 48px; }
+#start-screen .dedit__save      { font-size: 48px; }
+#start-screen .dedetail__btn    { font-size: 48px; }
+#start-screen .cdetail__close   { font-size: 51px; }
+#start-screen .dedetail__close  { font-size: 48px; }
+
+/* --- 通常本文（下限14px相当＝47px以上） --- */
+#start-screen .menu            { font-size: 48px; }
+#start-screen .menu__label     { font-size: 48px; }
+#start-screen .menu__desc      { font-size: 48px; }
+#start-screen .menu__card-desc { font-size: 48px; }
+#start-screen .menu__note      { font-size: 48px; }
+#start-screen .menu__done      { font-size: 48px; }
+#start-screen .menu__error     { font-size: 48px; }
+#start-screen .menu__wide      { font-size: 48px; }
+#start-screen .cardlist        { font-size: 48px; }
+#start-screen .cardlist__empty { font-size: 48px; }
+#start-screen .cltools__search { font-size: 48px; }
+#start-screen .cdetail         { font-size: 48px; }
+#start-screen .cdetail__effect { font-size: 48px; }
+#start-screen .dedetail        { font-size: 48px; }
+#start-screen .dedetail__effect { font-size: 48px; }
+#start-screen .dedetail__nums  { font-size: 48px; }
+#start-screen .tfin__lead      { font-size: 48px; }
+#start-screen .tfin__row       { font-size: 48px; }
+#start-screen .howto           { font-size: 48px; }
+
+/* --- 補足・ラベル・日付（下限12px相当＝41px以上） --- */
+#start-screen .menu__hint      { font-size: 41px; }
+#start-screen .menu__tag       { font-size: 41px; }
+#start-screen .menu__corner    { font-size: 41px; }
+#start-screen .listbar__count  { font-size: 41px; }
+#start-screen .cltools         { font-size: 41px; }
+#start-screen .cltools__label  { font-size: 41px; }
+#start-screen .cltools__chip   { font-size: 41px; }
+#start-screen .dband           { font-size: 41px; }
+#start-screen .dlfoot          { font-size: 41px; }
+#start-screen .dlfoot__note    { font-size: 41px; }
+#start-screen .dview__time     { font-size: 41px; }
+#start-screen .dedit__field    { font-size: 41px; }
+#start-screen .dedit__state    { font-size: 41px; }
+#start-screen .dedetail__why   { font-size: 41px; }
+#start-screen .fpick__note     { font-size: 41px; }
+#start-screen .dvfoot          { font-size: 41px; }
+
+/* --- 文字を大きくしたことで横に収まらなくなる箇所の調整（仕様 3.3）---
+   「文字を極端に縮小せず、余白・改行・配置を調整する」方針に従う。 */
+
+/* 難易度の5択（弱／中／強／エキスパート／理不尽）は
+   1行に収まらないので、折り返しを許して2段に流す。 */
+#start-screen .menu__choices {
+  flex-wrap: wrap;
+  gap: 14px;
+}
+#start-screen .menu__choice {
+  padding: 20px 8px;          /* 縦の余白を少し詰める */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#start-screen .menu__choice--small {
+  white-space: normal;        /* 長い語（エキスパート）を折り返せるように */
+  padding: 16px 10px;
+  line-height: 1.25;
+  /* 「理不尽」だけが2段目に落ちて不揃いに見えるのを防ぐ。
+     3つで1段になる幅（(800 - 14*2) / 3 ≒ 257px）を下限にして
+     3＋2 のきれいな2段にする。 */
+  flex: 1 1 240px;
+  min-width: 240px;
+}
+
+/* 一覧のヘッダーバー：戻る・タイトル・件数が詰まらないように */
+#start-screen .listbar {
+  gap: 14px;
+  padding: 20px 24px;
+}
+#start-screen .listbar__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#start-screen .listbar__count { flex: 0 0 auto; white-space: nowrap; }
+#start-screen .listbar__back  { flex: 0 0 auto; white-space: nowrap; }
+
+/* デッキ一覧・確認のフッターボタン：横並びが窮屈にならないように */
+#start-screen .dlfoot { gap: 14px; padding: 16px 20px 20px; flex-wrap: wrap; }
+#start-screen .dvfoot { gap: 10px; padding: 16px 20px 20px; }
+
+/* 検索・絞り込みのチップ類：折り返して2段以上になってよい */
+#start-screen .cltools__row { gap: 8px; }
+#start-screen .cltools__chip { padding: 10px 14px; white-space: nowrap; }
+
+/* 設定のラベルと値：長い行は折り返す */
+#start-screen .menu__label { line-height: 1.35; }
+#start-screen .menu__desc,
+#start-screen .menu__note,
+#start-screen .menu__hint { line-height: 1.5; }
+
+/* --- タップ領域を44px以上に（第3部 3.4）---
+   既存の --tap:122px は 320px 端末では 36px にしかならない
+   （#stage を 0.296 倍で表示するため）。メニュー配下だけ引き上げる。
+     149px * 0.296 ≒ 44px  … 主要ボタン
+     128px * 0.296 ≒ 38px  … 並べて出す絞り込みなど
+   盤面側の --tap は変更しない（カード操作の当たり判定に関わるため）。 */
+#start-screen {
+  --tap: 149px;
+  --tap-dense: 128px;
+}
